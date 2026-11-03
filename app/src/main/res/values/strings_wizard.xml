@@ -35,7 +35,7 @@
     <string name="wizard_threshold_prefix">"Open when "</string>
     <string name="wizard_n_of_m">%1$d of %2$d</string>
     <string name="wizard_threshold_suffix">" land."</string>
-    <string name="wizard_ratchet_prefix">"Each reopen raises every goal by "</string>
+    <string name="wizard_ratchet_prefix">"Missed checkpoints lock these apps until you catch up. "</string>
     <string name="wizard_ratchet_suffix">.</string>
     <string name="wizard_name_label">Name</string>
     <string name="wizard_suggest_name">Suggest a name</string>

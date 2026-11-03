@@ -322,12 +322,17 @@ class DefaultGateEngineTest {
 
         assertIs<GateState.Warn>(engine.states.value.getValue("b1"))
         assertTrue(enforcement.blocked.isEmpty())
-        // 12:00 due, 11:30 warning, 17:00 due, 16:30 warning
+        // Each checkpoint: the due alarm plus every reminder lead that is still ahead of 11:00.
+        // Noon (10:00Z): 60-minute lead already passed, so 09:30 and 09:50 remain.
+        // Five (15:00Z): 14:00, 14:30 and 14:50.
         assertEquals(
             listOf(
                 Instant.parse("2026-08-23T09:30:00Z") to true,
+                Instant.parse("2026-08-23T09:50:00Z") to true,
                 Instant.parse("2026-08-23T10:00:00Z") to false,
+                Instant.parse("2026-08-23T14:00:00Z") to true,
                 Instant.parse("2026-08-23T14:30:00Z") to true,
+                Instant.parse("2026-08-23T14:50:00Z") to true,
                 Instant.parse("2026-08-23T15:00:00Z") to false,
             ),
             alarmScheduler.checkpoints.sortedBy { it.first }.map { it.first to it.third },

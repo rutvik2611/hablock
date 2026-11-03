@@ -73,13 +73,15 @@ class DefaultGateEngine(
     private fun armCheckpointAlarms(now: Instant, dayKey: String) {
         if (!checkpointMode || armedCheckpointDayKey == dayKey) return
         armedCheckpointDayKey = dayKey
-        val lead = GateConstants.CHECKPOINT_WARNING_LEAD.inWholeMilliseconds
         dayClock.checkpoints(now).forEach { checkpoint ->
             if (!checkpoint.at.isAfter(now)) return@forEach
             alarmScheduler.scheduleCheckpoint(checkpoint.at, checkpoint.steps, warning = false)
-            val warnAt = checkpoint.at.minusMillis(lead)
-            if (warnAt.isAfter(now)) {
-                alarmScheduler.scheduleCheckpoint(warnAt, checkpoint.steps, warning = true)
+            GateConstants.CHECKPOINT_WARNING_LEADS.forEach { lead ->
+                val leadMinutes = lead.inWholeMinutes.toInt()
+                val warnAt = checkpoint.at.minusMillis(lead.inWholeMilliseconds)
+                if (warnAt.isAfter(now)) {
+                    alarmScheduler.scheduleCheckpoint(warnAt, checkpoint.steps, warning = true, leadMinutes = leadMinutes)
+                }
             }
         }
     }

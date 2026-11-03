@@ -35,7 +35,7 @@ interface AlarmScheduler {
     fun scheduleSessionEnd(blockId: String, at: Instant)
     fun cancelSessionEnd(blockId: String)
     fun scheduleDayReset(at: Instant)
-    fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean)
+    fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean, leadMinutes: Int = 0)
     fun scheduleRecheck(at: Instant)
     fun scheduleRelinquishReady(at: Instant)
     fun cancelRelinquishReady()

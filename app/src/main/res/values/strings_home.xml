@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="home_title">Blocks</string>
-    <string name="home_subtitle">%1$s · resets at midnight</string>
+    <string name="home_subtitle">%1$s · %2$s</string>
     <string name="home_hc_banner">Health Connect can\'t be read — step, workout and meditation goals count as zero.</string>
     <string name="home_hc_fix">Fix</string>
     <string name="home_empty_title">Nothing\'s locked up yet.</string>

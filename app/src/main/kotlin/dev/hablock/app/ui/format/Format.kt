@@ -3,6 +3,7 @@ package dev.hablock.app.ui.format
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import dev.hablock.app.R
+import dev.hablock.app.domain.GateConstants
 import dev.hablock.app.domain.model.Condition
 import java.time.Instant
 import java.time.ZoneId
@@ -28,6 +29,11 @@ fun Condition.formatValue(value: Double): String = when (this) {
 @Composable
 fun Condition.formatProgress(current: Double, required: Double): String =
     stringResource(R.string.format_progress, formatValue(current), formatValue(required))
+
+/** "4,000 by 12:00 · 10,000 by 17:00" — the day's checkpoints, for the home subtitle. */
+fun checkpointSummary(): String = GateConstants.CHECKPOINTS.joinToString(" · ") { rule ->
+    "%s by %02d:%02d".format(groupedInt(rule.steps), rule.hour, rule.minute)
+}
 
 fun groupedInt(value: Double): String = String.format(Locale.getDefault(), "%,d", value.roundToInt())
 

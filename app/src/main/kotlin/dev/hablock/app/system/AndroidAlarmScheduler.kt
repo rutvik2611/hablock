@@ -45,12 +45,12 @@ class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
         schedule(pendingIntent, at)
     }
 
-    override fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean) {
+    override fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean, leadMinutes: Int) {
         val action = if (warning) GateConstants.ACTION_CHECKPOINT_WARNING else GateConstants.ACTION_CHECKPOINT_REACHED
         // Distinct data per checkpoint, so the 12:00 and 17:00 alarms do not overwrite each other.
         val intent = Intent(context, AlarmReceiver::class.java)
             .setAction(action)
-            .setData(Uri.parse("hablock://checkpoint/${steps.toLong()}/${if (warning) "warn" else "due"}"))
+            .setData(Uri.parse("hablock://checkpoint/${steps.toLong()}/${if (warning) "warn" else "due"}/$leadMinutes"))
             .putExtra(GateConstants.EXTRA_CHECKPOINT_STEPS, steps)
         val pendingIntent = PendingIntent.getBroadcast(
             context,

@@ -27,8 +27,8 @@ object GateConstants {
     /** How often a closed gate re-reads Health Connect to notice that the target was reached. */
     val RECHECK_INTERVAL: Duration = 5.minutes
 
-    /** Lead time for the "X steps left by Y" reminder before each checkpoint. */
-    val CHECKPOINT_WARNING_LEAD: Duration = 30.minutes
+    /** Reminder leads before each checkpoint: "X steps left by 12:00" at each of these. */
+    val CHECKPOINT_WARNING_LEADS: List<Duration> = listOf(60.minutes, 30.minutes, 10.minutes)
     val SESSION_DURATION: Duration = 30.minutes
     val RELINQUISH_COOLDOWN: Duration = 3.days
     const val INCREMENT_MIN = 0.10f

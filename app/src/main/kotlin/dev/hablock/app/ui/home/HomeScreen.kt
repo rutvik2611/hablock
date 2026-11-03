@@ -51,6 +51,7 @@ import dev.hablock.app.ui.components.GroupPosition
 import dev.hablock.app.ui.components.GroupedListItem
 import dev.hablock.app.ui.components.HablockDialog
 import dev.hablock.app.ui.components.HablockIcons
+import dev.hablock.app.ui.format.checkpointSummary
 import dev.hablock.app.ui.format.formatWeekday
 import dev.hablock.app.ui.gateViewModel
 import dev.hablock.app.ui.wizard.BlockWizardSheet
@@ -93,7 +94,7 @@ fun HomeScreen(addRequest: Int = 0, onAddHandled: () -> Unit = {}) {
         topBar = {
             LargeFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.home_title)) },
-                subtitle = { Text(stringResource(R.string.home_subtitle, formatWeekday(uiState.today))) },
+                subtitle = { Text(stringResource(R.string.home_subtitle, formatWeekday(uiState.today), checkpointSummary())) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     scrolledContainerColor = MaterialTheme.colorScheme.background,

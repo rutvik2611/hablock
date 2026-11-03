@@ -118,7 +118,7 @@ class FakeAlarmScheduler : AlarmScheduler {
         dayResets += at
     }
 
-    override fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean) {
+    override fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean, leadMinutes: Int) {
         checkpoints += Triple(at, steps, warning)
     }
 
