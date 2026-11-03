@@ -33,6 +33,13 @@ object GateConstants {
     /** A single sample can credit at most this much, so a sleeping phone cannot fake a workout. */
     const val LOCATION_MAX_CREDIT_MILLIS: Long = 6 * 60_000L
 
+    /**
+     * Presence alone never earns gym credit: a phone on the sofa sits inside a tower gym's fence just as
+     * happily as one in the gym. A window only counts when it also shows movement (steps) or a workout.
+     */
+    const val MOVEMENT_MIN_STEPS: Double = 40.0
+    val MOVEMENT_WINDOW: Duration = 10.minutes
+
     /** Reminder leads before each checkpoint: "X steps left by 12:00" at each of these. */
     val CHECKPOINT_WARNING_LEADS: List<Duration> = listOf(60.minutes, 30.minutes, 10.minutes)
     val SESSION_DURATION: Duration = 30.minutes

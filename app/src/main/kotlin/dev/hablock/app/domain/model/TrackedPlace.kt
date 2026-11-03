@@ -88,6 +88,15 @@ object DwellTracker {
         )
     }
 
+    /**
+     * Whether a window looks like a real visit rather than a phone resting at home.
+     *
+     * Steps or a recorded workout both count; a still phone counts for nothing, however well it sits
+     * inside the fence.
+     */
+    fun corroborated(steps: Double, exerciseMinutes: Double, minSteps: Double): Boolean =
+        steps >= minSteps || exerciseMinutes > 0.0
+
     /** The first tracked place containing the reading, or null when outside all of them. */
     fun matchedPlace(places: List<TrackedPlace>, lat: Double, lon: Double): TrackedPlace? =
         places.firstOrNull { distanceMeters(lat, lon, it.latitude, it.longitude) <= it.radiusMeters }

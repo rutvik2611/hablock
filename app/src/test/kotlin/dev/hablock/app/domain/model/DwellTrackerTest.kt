@@ -100,4 +100,18 @@ class DwellTrackerTest {
         assertNotNull(matched)
         assertEquals("gym", matched!!.id)
     }
+
+    @Test
+    fun `presence alone is not corroboration`() {
+        // A phone resting at home inside a tower gym's fence: no steps, no workout.
+        assertFalse(DwellTracker.corroborated(steps = 0.0, exerciseMinutes = 0.0, minSteps = 40.0))
+        assertFalse(DwellTracker.corroborated(steps = 12.0, exerciseMinutes = 0.0, minSteps = 40.0))
+    }
+
+    @Test
+    fun `steps or a workout corroborate a visit`() {
+        assertTrue(DwellTracker.corroborated(steps = 210.0, exerciseMinutes = 0.0, minSteps = 40.0))
+        // A recorded session counts even while standing still between sets.
+        assertTrue(DwellTracker.corroborated(steps = 0.0, exerciseMinutes = 18.0, minSteps = 40.0))
+    }
 }

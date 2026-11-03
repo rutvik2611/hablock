@@ -27,6 +27,7 @@ class LocationSampler(
     private val context: Context,
     private val locationStore: LocationStore,
     private val dayClock: DayClock,
+    private val healthRepository: dev.hablock.app.domain.repository.HealthRepository? = null,
 ) {
 
     private val locationManager: LocationManager? =
@@ -44,6 +45,20 @@ class LocationSampler(
         val dayKey = dayClock.dayKey(now)
         val state = locationStore.day() ?: DwellDayState(dayKey = dayKey)
         val matched = DwellTracker.countedPlace(config.places, location.latitude, location.longitude)
+        // Presence is only a candidate. A window also has to look like activity, so a phone left on the
+        // sofa inside a tower gym's fence earns nothing.
+        val moving = matched != null && runCatching {
+            val windowFrom = if (state.lastSampleMillis > 0L) {
+                Instant.ofEpochMilli(state.lastSampleMillis)
+            } else {
+                now.minusMillis(GateConstants.MOVEMENT_WINDOW.inWholeMilliseconds)
+            }
+            DwellTracker.corroborated(
+                steps = healthRepository?.steps(windowFrom, now) ?: Double.MAX_VALUE,
+                exerciseMinutes = healthRepository?.exerciseMinutes(windowFrom, now) ?: 0.0,
+                minSteps = GateConstants.MOVEMENT_MIN_STEPS,
+            )
+        }.getOrDefault(true)
         // A check-in holds only while the phone is still at that place; leaving ends it.
         val stillThere = matched != null &&
             (state.checkInPlaceId == null || state.checkInPlaceId == matched.id)
@@ -51,7 +66,7 @@ class LocationSampler(
             state = state,
             dayKey = dayKey,
             now = now,
-            inside = matched != null,
+            inside = moving,
             maxStepMillis = GateConstants.LOCATION_MAX_CREDIT_MILLIS,
             placeId = matched?.id,
         )

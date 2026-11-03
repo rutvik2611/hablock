@@ -77,7 +77,7 @@ class AppContainer(context: Context) {
     val overrideStore: OverrideStore by lazy { DataStoreOverrideStore(dataStore) }
     val locationStore: LocationStore by lazy { DataStoreLocationStore(dataStore, json) }
     val locationSampler: dev.hablock.app.system.LocationSampler by lazy {
-        dev.hablock.app.system.LocationSampler(appContext, locationStore, dayClock)
+        dev.hablock.app.system.LocationSampler(appContext, locationStore, dayClock, healthRepository)
     }
 
     val alarmScheduler: AlarmScheduler by lazy { AndroidAlarmScheduler(appContext) }
