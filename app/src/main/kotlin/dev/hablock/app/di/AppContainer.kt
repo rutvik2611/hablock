@@ -109,6 +109,7 @@ class AppContainer(context: Context) {
             enforcement = enforcement,
             sessionDuration = sessionDuration,
             scope = applicationScope,
+            checkpointMode = GateConstants.CHECKPOINT_MODE,
         )
     }
 

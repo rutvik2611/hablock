@@ -1,11 +1,14 @@
 package dev.hablock.app.domain.service
 
+import dev.hablock.app.domain.GateConstants
 import dev.hablock.app.domain.enforcement.EnforcementBackend
 import dev.hablock.app.domain.model.Block
 import dev.hablock.app.domain.model.BlockDayState
 import dev.hablock.app.domain.model.Condition
+import dev.hablock.app.domain.model.ForegroundState
 import dev.hablock.app.domain.model.GateState
 import dev.hablock.app.domain.model.MetricSnapshot
+import dev.hablock.app.domain.model.StepCheckpoint
 import dev.hablock.app.domain.repository.BlockRepository
 import dev.hablock.app.domain.repository.GateStateRepository
 import java.time.Instant
@@ -39,11 +42,13 @@ class DefaultGateEngine(
     private val enforcement: EnforcementBackend,
     private val sessionDuration: Duration,
     scope: CoroutineScope,
+    private val checkpointMode: Boolean = false,
 ) : GateEngine {
 
     private val evaluator = GateEvaluator()
     private val mutex = Mutex()
     private val snapshotCache = mutableMapOf<String, SnapshotCacheEntry>()
+    private var armedCheckpointDayKey: String? = null
     private val _states = MutableStateFlow<Map<String, GateState>>(emptyMap())
 
     @Volatile
@@ -54,6 +59,28 @@ class DefaultGateEngine(
     init {
         scope.launch {
             blockRepository.blocks.collect { knownBlocks = it }
+        }
+    }
+
+    /** Empty in classic mode, so the evaluator locks immediately on an unmet goal. */
+    private fun checkpointList(now: Instant): List<StepCheckpoint> =
+        if (checkpointMode) dayClock.checkpoints(now) else emptyList()
+
+    /**
+     * Arms one warning and one closing alarm per remaining checkpoint, once per gate day. Every
+     * process start and day reset passes through [refresh], so this cannot be missed for long.
+     */
+    private fun armCheckpointAlarms(now: Instant, dayKey: String) {
+        if (!checkpointMode || armedCheckpointDayKey == dayKey) return
+        armedCheckpointDayKey = dayKey
+        val lead = GateConstants.CHECKPOINT_WARNING_LEAD.inWholeMilliseconds
+        dayClock.checkpoints(now).forEach { checkpoint ->
+            if (!checkpoint.at.isAfter(now)) return@forEach
+            alarmScheduler.scheduleCheckpoint(checkpoint.at, checkpoint.steps, warning = false)
+            val warnAt = checkpoint.at.minusMillis(lead)
+            if (warnAt.isAfter(now)) {
+                alarmScheduler.scheduleCheckpoint(warnAt, checkpoint.steps, warning = true)
+            }
         }
     }
 
@@ -71,15 +98,17 @@ class DefaultGateEngine(
             val now = dayClock.now()
             val dayKey = dayClock.dayKey(now)
             val (from, to) = dayClock.dayWindow(now)
+            val checkpoints = checkpointList(now)
             val evaluated = affected.map { block ->
                 val dayState = expireSession(resolveDayState(block, dayKey), now)
                 val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics = false)
-                Evaluated(block, dayState, snapshot, evaluator.evaluate(block, dayState, snapshot, now))
+                Evaluated(block, dayState, snapshot, evaluator.evaluate(block, dayState, snapshot, now, checkpoints))
             }
             val locked = evaluated.firstOrNull { it.gateState is GateState.Locked }
             if (locked != null) {
                 enforcement.showBlocked(packageName, locked.block.id)
-            } else {
+            } else if (!checkpointMode) {
+                // Checkpoint mode keeps an earned day open: no sessions to start.
                 evaluated.filter { it.gateState is GateState.Open }.forEach { startSession(it, now) }
             }
             refresh(blocks, refreshMetrics = false)
@@ -121,6 +150,46 @@ class DefaultGateEngine(
         }
     }
 
+    /** A checkpoint just came due: re-read the metric, close the gate if it is short, tell the user. */
+    override suspend fun onCheckpointReached() {
+        mutex.withLock {
+            val blocks = loadBlocks()
+            refresh(blocks, refreshMetrics = true)
+            coverForeground(blocks)
+            scheduleRecheckIfLocked(blocks)
+        }
+    }
+
+    /** Half an hour before a checkpoint: remind with the exact shortfall if one is still outstanding. */
+    override suspend fun onCheckpointWarning() {
+        mutex.withLock {
+            val blocks = loadBlocks()
+            refresh(blocks, refreshMetrics = true)
+            val now = dayClock.now()
+            val upcoming = dayClock.nextCheckpoint(now) ?: return@withLock
+            val shortfall = blocks
+                .filter { it.enabled }
+                .mapNotNull { states.value[it.id] }
+                .filterIsInstance<GateState.Warn>()
+                .maxOfOrNull { warn -> (warn.nextSteps - stepsNow(warn.progress)).coerceAtLeast(0.0) }
+                ?: return@withLock
+            if (shortfall > 0) notifier.checkpointWarning(shortfall, upcoming.steps, upcoming.at)
+        }
+    }
+
+    /**
+     * The gate is closed and the user is walking: poll the metric so the apps come back without the
+     * user having to touch anything. Reschedules itself until nothing is locked.
+     */
+    override suspend fun onRecheck() {
+        mutex.withLock {
+            val blocks = loadBlocks()
+            refresh(blocks, refreshMetrics = true)
+            coverForeground(blocks)
+            scheduleRecheckIfLocked(blocks)
+        }
+    }
+
     /** An in-flight session survives the reset on a base-goal day state; an expired one takes its alarm with it. */
     private suspend fun carryOver(block: Block, dayKey: String, now: Instant): BlockDayState? {
         val session = gateStateRepository.get(block.id)?.activeSession ?: return null
@@ -135,23 +204,70 @@ class DefaultGateEngine(
         val now = dayClock.now()
         val dayKey = dayClock.dayKey(now)
         val (from, to) = dayClock.dayWindow(now)
+        armCheckpointAlarms(now, dayKey)
+        val checkpoints = checkpointList(now)
         val previous = _states.value
-        val autoStart = !enforcement.reportsForegroundUse()
+        val autoStart = !checkpointMode && !enforcement.reportsForegroundUse()
         val next = mutableMapOf<String, GateState>()
         for (block in blocks.filter { it.enabled }) {
             val dayState = expireSession(resolveDayState(block, dayKey), now)
             val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics)
-            var state = evaluator.evaluate(block, dayState, snapshot, now)
+            var state = evaluator.evaluate(block, dayState, snapshot, now, checkpoints)
             if (autoStart && state is GateState.Open && justUnlocked(previous[block.id], dayState)) {
                 startSession(Evaluated(block, dayState, snapshot, state), now)?.let {
-                    state = evaluator.evaluate(block, it, snapshot, now)
+                    state = evaluator.evaluate(block, it, snapshot, now, checkpoints)
                 }
             }
             next[block.id] = state
         }
         _states.value = next
         enforcement.applyState(blocks, next)
+        announceTransitions(previous, next)
     }
+
+    /** One notification per block crossing the line, so a closed gate is never silent. */
+    private fun announceTransitions(previous: Map<String, GateState>, next: Map<String, GateState>) {
+        next.forEach { (blockId, state) ->
+            val was = previous[blockId]
+            if (was == null) return@forEach
+            val wasLocked = was is GateState.Locked
+            when {
+                !wasLocked && state is GateState.Locked ->
+                    notifier.gateClosed(stepsRemaining(state.progress), stepsRequired(state.progress))
+                wasLocked && (state is GateState.Open || state is GateState.Warn) ->
+                    notifier.gateOpened()
+            }
+        }
+    }
+
+    /** Covers the app that is already on screen; the accessibility service only reacts to changes. */
+    private suspend fun coverForeground(blocks: List<Block>) {
+        val current = ForegroundState.packageName ?: return
+        val blocking = blocks.firstOrNull { block ->
+            block.enabled && current in block.blockedPackages && states.value[block.id] is GateState.Locked
+        } ?: return
+        enforcement.showBlocked(current, blocking.id)
+    }
+
+    private fun scheduleRecheckIfLocked(blocks: List<Block>) {
+        if (!checkpointMode) return
+        val anyLocked = blocks.any { it.enabled && states.value[it.id] is GateState.Locked }
+        if (!anyLocked) return
+        val at = dayClock.now().plusMillis(GateConstants.RECHECK_INTERVAL.inWholeMilliseconds)
+        alarmScheduler.scheduleRecheck(at)
+    }
+
+    private fun stepsProgress(progress: List<dev.hablock.app.domain.model.ConditionProgress>) =
+        progress.firstOrNull { it.condition is Condition.Steps }
+
+    private fun stepsNow(progress: List<dev.hablock.app.domain.model.ConditionProgress>): Double =
+        stepsProgress(progress)?.current ?: 0.0
+
+    private fun stepsRequired(progress: List<dev.hablock.app.domain.model.ConditionProgress>): Double =
+        stepsProgress(progress)?.required ?: 0.0
+
+    private fun stepsRemaining(progress: List<dev.hablock.app.domain.model.ConditionProgress>): Double =
+        (stepsRequired(progress) - stepsNow(progress)).coerceAtLeast(0.0)
 
     /** On a fresh process every previous state is null; only a block with no unlock today gets its auto-session. */
     private fun justUnlocked(previous: GateState?, dayState: BlockDayState): Boolean =

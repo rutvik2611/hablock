@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import dev.hablock.app.HablockApplication
+import dev.hablock.app.domain.model.ForegroundState
 import kotlinx.coroutines.launch
 
 private const val DEBOUNCE_MS = 700L
@@ -38,6 +39,7 @@ class HablockAccessibilityService : AccessibilityService() {
         if (pkg == lastPackage && now - lastEventAt < DEBOUNCE_MS) return
         lastPackage = pkg
         lastEventAt = now
+        ForegroundState.packageName = pkg
 
         val container = (applicationContext as HablockApplication).container
         container.applicationScope.launch { container.gateEngine.onAppForegrounded(pkg) }

@@ -5,6 +5,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import dev.hablock.app.domain.model.StepCheckpoint
 import java.time.ZonedDateTime
 
 /** The Gate day runs from DAY_RESET_HOUR to DAY_RESET_HOUR in local time. */
@@ -30,6 +31,24 @@ class DayClock(
 
     fun nextReset(now: Instant = now()): Instant =
         resetAt(dayStart(now).atZone(zone).toLocalDate().plusDays(1))
+
+    /** Today's checkpoints in local time, earliest first. */
+    fun checkpoints(now: Instant = now()): List<StepCheckpoint> {
+        val date = dayStart(now).atZone(zone).toLocalDate()
+        return GateConstants.CHECKPOINTS.map { StepCheckpoint(at(date, it.hour, it.minute), it.steps) }
+    }
+
+    fun passedCheckpoints(now: Instant = now()): List<StepCheckpoint> =
+        checkpoints(now).filter { !now.isBefore(it.at) }
+
+    fun nextCheckpoint(now: Instant = now()): StepCheckpoint? =
+        checkpoints(now).firstOrNull { now.isBefore(it.at) }
+
+    /** Step target already due today, or 0.0 before the first checkpoint. */
+    fun requiredSteps(now: Instant = now()): Double = passedCheckpoints(now).lastOrNull()?.steps ?: 0.0
+
+    private fun at(date: LocalDate, hour: Int, minute: Int): Instant =
+        ZonedDateTime.of(date, java.time.LocalTime.of(hour, minute), zone).toInstant()
 
     private fun resetAt(date: LocalDate): Instant =
         ZonedDateTime.of(date, java.time.LocalTime.of(GateConstants.DAY_RESET_HOUR, 0), zone).toInstant()

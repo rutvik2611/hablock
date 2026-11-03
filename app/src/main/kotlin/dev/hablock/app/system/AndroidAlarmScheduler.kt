@@ -13,6 +13,9 @@ import java.time.Instant
 private const val DAY_RESET_REQUEST_CODE = 0
 private const val RELINQUISH_READY_REQUEST_CODE = 1
 private const val SESSION_REQUEST_CODE = 2
+private const val CHECKPOINT_REQUEST_CODE = 3
+private const val CHECKPOINT_WARNING_REQUEST_CODE = 4
+private const val RECHECK_REQUEST_CODE = 5
 private const val INEXACT_WINDOW_MILLIS = 2 * 60 * 1000L
 
 class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
@@ -36,6 +39,33 @@ class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             DAY_RESET_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        schedule(pendingIntent, at)
+    }
+
+    override fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean) {
+        val action = if (warning) GateConstants.ACTION_CHECKPOINT_WARNING else GateConstants.ACTION_CHECKPOINT_REACHED
+        // Distinct data per checkpoint, so the 12:00 and 17:00 alarms do not overwrite each other.
+        val intent = Intent(context, AlarmReceiver::class.java)
+            .setAction(action)
+            .setData(Uri.parse("hablock://checkpoint/${steps.toLong()}/${if (warning) "warn" else "due"}"))
+            .putExtra(GateConstants.EXTRA_CHECKPOINT_STEPS, steps)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            if (warning) CHECKPOINT_WARNING_REQUEST_CODE else CHECKPOINT_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        schedule(pendingIntent, at)
+    }
+
+    override fun scheduleRecheck(at: Instant) {
+        val intent = Intent(context, AlarmReceiver::class.java).setAction(GateConstants.ACTION_RECHECK)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            RECHECK_REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

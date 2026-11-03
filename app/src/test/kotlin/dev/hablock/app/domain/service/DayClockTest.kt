@@ -46,6 +46,38 @@ class DayClockTest {
     }
 
     @Test
+    fun `checkpoints are noon and five in local time`() {
+        // Berlin is UTC+2 in August, so 12:00 local is 10:00Z and 17:00 local is 15:00Z.
+        val clock = clockAt("2026-08-23T09:30:00Z")
+        val checkpoints = clock.checkpoints()
+        assertEquals(2, checkpoints.size)
+        assertEquals(Instant.parse("2026-08-23T10:00:00Z"), checkpoints[0].at)
+        assertEquals(4_000.0, checkpoints[0].steps)
+        assertEquals(Instant.parse("2026-08-23T15:00:00Z"), checkpoints[1].at)
+        assertEquals(10_000.0, checkpoints[1].steps)
+    }
+
+    @Test
+    fun `nothing is due before noon and four thousand is due after it`() {
+        val morning = clockAt("2026-08-23T09:00:00Z")
+        assertEquals(0.0, morning.requiredSteps(now = morning.now()))
+        val afternoon = clockAt("2026-08-23T11:00:00Z") // 13:00 local
+        assertEquals(4_000.0, afternoon.requiredSteps(now = afternoon.now()))
+        val night = clockAt("2026-08-23T16:00:00Z") // 18:00 local
+        assertEquals(10_000.0, night.requiredSteps(now = night.now()))
+    }
+
+    @Test
+    fun `next checkpoint moves from noon to five during the day`() {
+        val morning = clockAt("2026-08-23T09:00:00Z")
+        assertEquals(4_000.0, morning.nextCheckpoint(now = morning.now())!!.steps)
+        val afternoon = clockAt("2026-08-23T11:00:00Z")
+        assertEquals(10_000.0, afternoon.nextCheckpoint(now = afternoon.now())!!.steps)
+        val evening = clockAt("2026-08-23T16:00:00Z")
+        assertEquals(null, evening.nextCheckpoint(now = evening.now()))
+    }
+
+    @Test
     fun `next reset is always strictly in the future`() {
         var instant = Instant.parse("2026-08-22T01:00:00Z")
         repeat(48) {

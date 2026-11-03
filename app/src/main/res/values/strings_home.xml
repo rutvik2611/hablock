@@ -18,8 +18,17 @@
     <string name="home_card_status_open_until">Open until %1$s</string>
     <string name="home_card_status_open">Open — go ahead</string>
     <string name="home_card_status_locked">Locked · %1$d of %2$d so far</string>
+    <string name="home_card_status_warn">Open · %1$s more by %2$s</string>
+    <string name="home_card_deadline_left">until the gate closes</string>
     <string name="home_card_of">of %1$d</string>
     <string name="home_card_session_left">left in this session</string>
     <string name="home_card_click_label">Show details</string>
     <string name="home_card_long_click_label">Block actions</string>
+    <string name="home_card_deadline_hint">%1$s by %2$s</string>
+    <string name="notif_checkpoint_title">%1$s steps by %2$s</string>
+    <string name="notif_checkpoint_text">You still need %1$s steps. Your apps lock at %2$s.</string>
+    <string name="notif_gate_closed_title">Apps locked — %1$s steps</string>
+    <string name="notif_gate_closed_text">%1$s steps to go. They unlock by themselves the moment you get there.</string>
+    <string name="notif_gate_opened_title">Unlocked — nice work</string>
+    <string name="notif_gate_opened_text">Target reached. Your apps are back until the next checkpoint.</string>
 </resources>

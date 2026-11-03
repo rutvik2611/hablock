@@ -24,6 +24,17 @@ sealed interface GateState {
         val thresholdN: Int,
     ) : GateState
 
+    /**
+     * Before the next checkpoint with a goal still reachable: apps stay open and the card warns what
+     * is still owed. Enforcement must treat this as "not blocked".
+     */
+    data class Warn(
+        override val progress: List<ConditionProgress>,
+        val thresholdN: Int,
+        val deadline: Instant,
+        val nextSteps: Double,
+    ) : GateState
+
     data class SessionActive(
         override val progress: List<ConditionProgress>,
         val endsAt: Instant,
