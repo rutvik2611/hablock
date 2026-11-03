@@ -28,6 +28,10 @@
     <string name="onboarding_grant_accessibility_detail">Notices which app comes to the front</string>
     <string name="onboarding_grant_usage">Usage access</string>
     <string name="onboarding_grant_usage_detail">Counts minutes in your apps</string>
+    <string name="onboarding_grant_location">Location</string>
+    <string name="onboarding_grant_location_detail">Lets a gym visit count, and lets you check in</string>
+    <string name="onboarding_grant_background_location">Background location</string>
+    <string name="onboarding_grant_background_location_detail">Needed to notice a visit while the app is closed</string>
     <string name="onboarding_grant_notifications">Notifications</string>
     <string name="onboarding_grant_notifications_detail">A heads-up when a session ends</string>
     <string name="onboarding_grant_health">Health Connect</string>

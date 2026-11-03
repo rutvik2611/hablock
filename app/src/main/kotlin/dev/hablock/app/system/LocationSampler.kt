@@ -44,7 +44,12 @@ class LocationSampler(
         val now = Instant.now()
         val dayKey = dayClock.dayKey(now)
         val state = locationStore.day() ?: DwellDayState(dayKey = dayKey)
-        val matched = DwellTracker.countedPlace(config.places, location.latitude, location.longitude)
+        val matched = DwellTracker.countedPlace(
+            config.places,
+            location.latitude,
+            location.longitude,
+            accuracyMeters = location.accuracy.coerceAtLeast(0f).toDouble(),
+        )
         // Presence is only a candidate. A window also has to look like activity, so a phone left on the
         // sofa inside a tower gym's fence earns nothing.
         val moving = matched != null && runCatching {
@@ -59,9 +64,11 @@ class LocationSampler(
                 minSteps = GateConstants.MOVEMENT_MIN_STEPS,
             )
         }.getOrDefault(true)
-        // A check-in holds only while the phone is still at that place; leaving ends it.
+        // A check-in holds only while the phone is still at that place. One stray indoor fix is not proof
+        // of leaving, so two consecutive misses are required before the check-in is dropped.
         val stillThere = matched != null &&
             (state.checkInPlaceId == null || state.checkInPlaceId == matched.id)
+        val streak = if (matched != null) 0 else state.outsideStreak + 1
         val next = DwellTracker.apply(
             state = state,
             dayKey = dayKey,
@@ -70,12 +77,13 @@ class LocationSampler(
             maxStepMillis = GateConstants.LOCATION_MAX_CREDIT_MILLIS,
             placeId = matched?.id,
         )
+        val ended = state.checkInPlaceId != null && !stillThere && streak >= 2
         locationStore.saveDay(
-            if (state.checkInPlaceId != null && !stillThere) {
-                next.copy(checkInPlaceId = null, checkInSinceMillis = 0L)
-            } else {
-                next
-            },
+            next.copy(
+                outsideStreak = streak,
+                checkInPlaceId = if (ended) null else next.checkInPlaceId,
+                checkInSinceMillis = if (ended) 0L else next.checkInSinceMillis,
+            ),
         )
     }
 

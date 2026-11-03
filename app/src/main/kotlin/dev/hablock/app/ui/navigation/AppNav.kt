@@ -50,12 +50,14 @@ import dev.hablock.app.R
 import dev.hablock.app.ui.components.HablockIcons
 import dev.hablock.app.ui.components.MorphShape
 import dev.hablock.app.ui.home.HomeScreen
+import dev.hablock.app.ui.places.PlacesScreen
 import dev.hablock.app.ui.screentime.ScreenTimeScreen
 import dev.hablock.app.ui.settings.SettingsScreen
 
 enum class Destination(@StringRes val labelRes: Int) {
     Blocks(R.string.nav_blocks),
     ScreenTime(R.string.nav_time),
+    Places(R.string.nav_places),
     Settings(R.string.nav_settings),
 }
 
@@ -63,6 +65,7 @@ private val Destination.icon: ImageVector
     get() = when (this) {
         Destination.Blocks -> Icons.Rounded.Lock
         Destination.ScreenTime -> HablockIcons.Clock
+        Destination.Places -> HablockIcons.Place
         Destination.Settings -> Icons.Rounded.Settings
     }
 
@@ -75,6 +78,7 @@ fun AppNav() {
         Box(Modifier.fillMaxSize()) {
             when (destination) {
                 Destination.Blocks -> HomeScreen(addRequest = addRequested, onAddHandled = { addRequested = 0 })
+                Destination.Places -> PlacesScreen()
                 Destination.ScreenTime -> ScreenTimeScreen()
                 Destination.Settings -> SettingsScreen()
             }

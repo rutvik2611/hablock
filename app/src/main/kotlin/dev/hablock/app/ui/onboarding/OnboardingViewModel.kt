@@ -16,6 +16,8 @@ data class GrantsUiState(
     val accessibility: Boolean = false,
     val usageAccess: Boolean = false,
     val notifications: Boolean = false,
+    val fineLocation: Boolean = false,
+    val backgroundLocation: Boolean = false,
     val health: Boolean = false,
     val healthAvailability: HcAvailability = HcAvailability.UNAVAILABLE,
 ) {
@@ -43,6 +45,8 @@ class OnboardingViewModel(
                     accessibility = permissionChecker.isAccessibilityServiceEnabled(),
                     usageAccess = permissionChecker.hasUsageAccess(),
                     notifications = permissionChecker.hasNotificationPermission(),
+                    fineLocation = permissionChecker.hasFineLocation(),
+                    backgroundLocation = permissionChecker.hasBackgroundLocation(),
                     health = healthGranted,
                     healthAvailability = availability,
                 )

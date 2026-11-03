@@ -228,6 +228,12 @@ private fun GrantsPage(
     val healthLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
     ) { onRefresh() }
+    val locationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { }
+    val backgroundLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { }
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { onRefresh() }
@@ -256,6 +262,30 @@ private fun GrantsPage(
                     } else {
                         context.openNotificationSettings()
                     }
+                }
+                OnboardingGrant(
+                    GroupPosition.Middle,
+                    4,
+                    stringResource(R.string.onboarding_grant_location),
+                    stringResource(R.string.onboarding_grant_location_detail),
+                    grants.fineLocation,
+                ) {
+                    locationLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                        ),
+                    )
+                }
+                OnboardingGrant(
+                    GroupPosition.Middle,
+                    5,
+                    stringResource(R.string.onboarding_grant_background_location),
+                    stringResource(R.string.onboarding_grant_background_location_detail),
+                    grants.backgroundLocation,
+                ) {
+                    // Android 11+ answers this request with the "Allow all the time" settings page.
+                    backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                 }
                 if (grants.healthSupported) {
                     OnboardingGrant(GroupPosition.Last, 3, stringResource(R.string.onboarding_grant_health), stringResource(R.string.onboarding_grant_health_detail), grants.health) {

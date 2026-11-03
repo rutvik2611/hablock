@@ -144,22 +144,27 @@ class SettingsViewModel(
     fun checkIn(placeId: String) = viewModelScope.launch {
         val place = locationStore.config().places.firstOrNull { it.id == placeId }
             ?: return@launch
+        // GPS indoors is routinely 10-50 m off, so the check is only refused when the fix *confidently*
+        // says the phone is somewhere else. No fix at all is uncertainty, not a refusal: the check-in is
+        // accepted provisionally and minutes only start once a later sample confirms presence.
         val fix = runCatching { locationSampler.currentLocation() }.getOrNull()
-        if (fix == null) {
-            _uiState.update { it.copy(checkInNotice = "No location fix yet. Try again in a moment.") }
-            return@launch
-        }
-        val distance = dev.hablock.app.domain.model.DwellTracker.distanceMeters(
-            fix.latitude,
-            fix.longitude,
-            place.latitude,
-            place.longitude,
-        )
-        if (distance > place.radiusMeters) {
-            _uiState.update {
-                it.copy(checkInNotice = "You are ${distance.toInt()} m from ${place.name}. Check-in needs you inside it.")
+        if (fix != null) {
+            val distance = dev.hablock.app.domain.model.DwellTracker.distanceMeters(
+                fix.latitude,
+                fix.longitude,
+                place.latitude,
+                place.longitude,
+            )
+            val accuracy = fix.accuracy.coerceAtLeast(0f).toDouble()
+            if (distance > place.radiusMeters + accuracy) {
+                _uiState.update {
+                    it.copy(
+                        checkInNotice = "You are ${distance.toInt()} m from ${place.name} " +
+                            "(±${accuracy.toInt()} m). Check-in needs you inside it.",
+                    )
+                }
+                return@launch
             }
-            return@launch
         }
         val now = dayClock.now()
         val dayKey = dayClock.dayKey(now)

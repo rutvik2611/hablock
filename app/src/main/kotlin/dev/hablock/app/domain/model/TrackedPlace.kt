@@ -44,6 +44,8 @@ data class DwellDayState(
     /** Set while the user has told the app they are at a place ("I'm here"). */
     val checkInPlaceId: String? = null,
     val checkInSinceMillis: Long = 0L,
+    /** Consecutive readings that said "not here", so one bad indoor fix cannot end a visit. */
+    val outsideStreak: Int = 0,
 ) {
     val accumulatedMinutes: Long get() = accumulatedMillis / 60_000L
 
@@ -107,8 +109,16 @@ object DwellTracker {
      * An excluded place wins over any counted one it overlaps: if the phone is at home, the gym next door
      * inside the same building earns nothing. This is what stops a lazy day at home from passing the rule.
      */
-    fun countedPlace(places: List<TrackedPlace>, lat: Double, lon: Double): TrackedPlace? {
-        val inside = places.filter { distanceMeters(lat, lon, it.latitude, it.longitude) <= it.radiusMeters }
+    fun countedPlace(
+        places: List<TrackedPlace>,
+        lat: Double,
+        lon: Double,
+        accuracyMeters: Double = 0.0,
+    ): TrackedPlace? {
+        // The fix's own accuracy widens the fence: indoors, a 30 m error must not eject a member mid-set.
+        val inside = places.filter {
+            distanceMeters(lat, lon, it.latitude, it.longitude) <= it.radiusMeters + accuracyMeters
+        }
         if (inside.any { it.excluded }) return null
         return inside.firstOrNull()
     }

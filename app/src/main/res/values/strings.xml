@@ -12,6 +12,14 @@
     <string name="status_done">Done</string>
 
     <string name="nav_blocks">Blocks</string>
+    <string name="nav_places">Places</string>
+    <string name="places_title">Places</string>
+    <string name="places_subtitle">Gym and other places where time counts. Separate from the step clock.</string>
+    <string name="places_section_rule">Rule</string>
+    <string name="places_section_saved">Saved places</string>
+    <string name="places_empty">No places yet</string>
+    <string name="places_empty_hint">Add the gym you actually go to.</string>
+    <string name="places_add_hint">Type the coordinates once; from then on it is one tap.</string>
     <string name="nav_time">Time</string>
     <string name="nav_settings">Settings</string>
 
