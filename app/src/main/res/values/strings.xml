@@ -20,6 +20,10 @@
     <string name="places_empty">No zones yet</string>
     <string name="places_empty_hint">Add the gym you actually go to.</string>
     <string name="places_custom">Custom</string>
+    <string name="zone_map_open">Pick on map</string>
+    <string name="zone_map_title">Pick the zone on the map</string>
+    <string name="zone_map_hint">Tap the map to place the centre, then drag the slider for the radius. Tiles come from OpenStreetMap; your coordinates are never sent.</string>
+    <string name="zone_map_use">Use this zone</string>
     <string name="places_record_fence">Walk the boundary</string>
     <string name="places_record_hint">Walk around the place once and keep walking until you are back at the start. Every few seconds adds a point.</string>
     <string name="places_record_points">%1$d points walked</string>

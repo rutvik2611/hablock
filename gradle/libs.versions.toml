@@ -2,6 +2,7 @@
 agp = "8.13.0"
 kotlin = "2.1.20"
 composeBom = "2025.11.00"
+osmdroid = "6.1.20"
 material3 = "1.5.0-alpha14"
 materialIconsCore = "1.7.8"
 activityCompose = "1.10.1"
@@ -32,6 +33,8 @@ health-connect-client = { group = "androidx.health.connect", name = "connect-cli
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
+
+osmdroid-android = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

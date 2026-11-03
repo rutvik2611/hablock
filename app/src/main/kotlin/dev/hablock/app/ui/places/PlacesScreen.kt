@@ -228,6 +228,7 @@ private fun AddPlaceDialog(
     var lon by remember { mutableStateOf("") }
     var home by remember { mutableStateOf(preset.equals("Home", ignoreCase = true)) }
     var recording by remember { mutableStateOf(false) }
+    var mapping by remember { mutableStateOf(false) }
     var minutes by remember { mutableStateOf(initialMinutes.toString()) }
     var hour by remember { mutableStateOf(initialHour.toString()) }
     val latValue = lat.toDoubleOrNull()
@@ -260,9 +261,13 @@ private fun AddPlaceDialog(
                     },
                 ) { Text(stringResource(R.string.places_use_current)) }
 
-                // Walking the boundary is the other way to place a fence, with no map and no network.
-                TextButton(onClick = { recording = true }) {
-                    Text(stringResource(R.string.places_record_fence))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { mapping = true }) {
+                        Text(stringResource(R.string.zone_map_open))
+                    }
+                    TextButton(onClick = { recording = true }) {
+                        Text(stringResource(R.string.places_record_fence))
+                    }
                 }
                 OutlinedTextField(
                     value = lat,
@@ -337,6 +342,20 @@ private fun AddPlaceDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 
+    if (mapping) {
+        ZoneMapDialog(
+            initialLat = lat.toDoubleOrNull(),
+            initialLon = lon.toDoubleOrNull(),
+            initialRadius = radius.toDoubleOrNull() ?: 150.0,
+            onDismiss = { mapping = false },
+            onPicked = { pickLat, pickLon, pickRadius ->
+                lat = "%.6f".format(pickLat)
+                lon = "%.6f".format(pickLon)
+                radius = pickRadius.toInt().toString()
+                mapping = false
+            },
+        )
+    }
     if (recording) {
         FenceRecordDialog(
             onSample = onUseCurrent,

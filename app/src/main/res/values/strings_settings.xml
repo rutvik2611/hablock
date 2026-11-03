@@ -19,8 +19,8 @@
     <string name="settings_section_about">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_version_value">Hablock %1$s</string>
-    <string name="settings_offline_title">Fully offline</string>
-    <string name="settings_offline_body">No network permission — nothing Hablock reads can leave this phone.</string>
+    <string name="settings_offline_title">Offline by default</string>
+    <string name="settings_offline_body">Network is used only to fetch map tiles. Steps, places and unlocks never leave the phone.</string>
     <string name="settings_relinquish_start_title">Start the 3-day timer?</string>
     <string name="settings_relinquish_start_message">Hablock keeps enforcing for three days. After that you can hand back control and uninstall. Cancel any time before then.</string>
     <string name="settings_relinquish_start_confirm">Start timer</string>

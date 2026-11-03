@@ -85,6 +85,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.graphics.shapes)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.osmdroid.android)
     implementation(libs.health.connect.client)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.tooling.preview)
