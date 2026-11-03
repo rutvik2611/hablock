@@ -20,6 +20,12 @@
     <string name="places_empty">No places yet</string>
     <string name="places_empty_hint">Add the gym you actually go to.</string>
     <string name="places_custom">Custom</string>
+    <string name="places_record_fence">Walk the boundary</string>
+    <string name="places_record_hint">Walk around the place once and keep walking until you are back at the start. Every few seconds adds a point.</string>
+    <string name="places_record_points">%1$d points walked</string>
+    <string name="places_record_need_more">Keep walking — at least four points are needed.</string>
+    <string name="places_record_done_radius">Fence ready: %1$d m radius from %2$d points</string>
+    <string name="places_record_save">Use this fence</string>
     <string name="places_editor_title">Add a place</string>
     <string name="places_use_current">Use my current location</string>
     <string name="places_minutes">Minutes</string>

@@ -24,6 +24,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,6 +35,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hablock.app.R
+import dev.hablock.app.domain.model.FenceRecorder
+import dev.hablock.app.domain.model.RecordedFence
+import kotlinx.coroutines.delay
 import dev.hablock.app.ui.components.GroupPosition
 import dev.hablock.app.ui.components.GroupedListItem
 import dev.hablock.app.ui.components.SectionHeader
@@ -222,6 +227,7 @@ private fun AddPlaceDialog(
     var lat by remember { mutableStateOf("") }
     var lon by remember { mutableStateOf("") }
     var home by remember { mutableStateOf(preset.equals("Home", ignoreCase = true)) }
+    var recording by remember { mutableStateOf(false) }
     var minutes by remember { mutableStateOf(initialMinutes.toString()) }
     var hour by remember { mutableStateOf(initialHour.toString()) }
     val latValue = lat.toDoubleOrNull()
@@ -254,6 +260,10 @@ private fun AddPlaceDialog(
                     },
                 ) { Text(stringResource(R.string.places_use_current)) }
 
+                // Walking the boundary is the other way to place a fence, with no map and no network.
+                TextButton(onClick = { recording = true }) {
+                    Text(stringResource(R.string.places_record_fence))
+                }
                 OutlinedTextField(
                     value = lat,
                     onValueChange = { lat = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
@@ -323,6 +333,81 @@ private fun AddPlaceDialog(
                 },
                 enabled = ready,
             ) { Text(stringResource(R.string.settings_location_save)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+
+    if (recording) {
+        FenceRecordDialog(
+            onSample = onUseCurrent,
+            onDismiss = { recording = false },
+            onRecorded = { fence ->
+                lat = "%.6f".format(fence.latitude)
+                lon = "%.6f".format(fence.longitude)
+                radius = fence.radiusMeters.toInt().toString()
+                recording = false
+            },
+        )
+    }
+}
+
+/** Walks the boundary: one fix every few seconds until the user says the loop is closed. */
+@Composable
+private fun FenceRecordDialog(
+    onSample: (fill: (Double, Double) -> Unit) -> Unit,
+    onDismiss: () -> Unit,
+    onRecorded: (RecordedFence) -> Unit,
+) {
+    val points = remember { mutableStateListOf<Pair<Double, Double>>() }
+    var lastFix by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    val fence = remember(points.size) { FenceRecorder.record(points.toList()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            onSample { fixLat, fixLon -> lastFix = fixLat to fixLon }
+            delay(3_000)
+        }
+    }
+    LaunchedEffect(lastFix) {
+        val fix = lastFix ?: return@LaunchedEffect
+        val previous = points.lastOrNull()
+        // Only a real move is a new boundary point; a still phone must not add duplicates.
+        if (previous == null || dev.hablock.app.domain.model.DwellTracker.distanceMeters(
+                previous.first,
+                previous.second,
+                fix.first,
+                fix.second,
+            ) > 2.0
+        ) {
+            points.add(fix)
+        }
+    }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.places_record_fence)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.places_record_hint), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.places_record_points, points.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    if (fence == null) {
+                        stringResource(R.string.places_record_need_more)
+                    } else {
+                        stringResource(R.string.places_record_done_radius, fence.radiusMeters.toInt(), fence.samples)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { fence?.let(onRecorded) }, enabled = fence != null) {
+                Text(stringResource(R.string.places_record_save))
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
