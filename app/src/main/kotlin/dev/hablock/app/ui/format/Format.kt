@@ -32,7 +32,9 @@ fun Condition.formatProgress(current: Double, required: Double): String =
 
 /** "4,000 by 12:00 · 10,000 by 17:00" — the day's checkpoints, for the home subtitle. */
 fun checkpointSummary(): String = GateConstants.CHECKPOINTS.joinToString(" · ") { rule ->
-    "%s by %02d:%02d".format(groupedInt(rule.steps), rule.hour, rule.minute)
+    val time = java.time.LocalTime.of(rule.hour, rule.minute)
+        .format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
+    "%s by %s".format(groupedInt(rule.steps), time)
 }
 
 fun groupedInt(value: Double): String = String.format(Locale.getDefault(), "%,d", value.roundToInt())
@@ -61,9 +63,8 @@ fun formatDayHeader(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): St
 fun formatWeekday(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
     instant.atZone(zone).dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
 
-fun formatClock(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
-    val time = instant.atZone(zone)
-    return "${time.hour.toString().padStart(2, '0')}:${time.minute.toString().padStart(2, '0')}"
-}
+/** Household-facing clock: 12-hour with AM/PM, because "17:00" means nothing to most people. */
+fun formatClock(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
+    instant.atZone(zone).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()))
 
 fun formatPercent(fraction: Float): String = "${(fraction * 100).roundToInt()}%"

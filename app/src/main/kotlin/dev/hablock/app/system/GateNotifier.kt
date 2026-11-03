@@ -21,7 +21,7 @@ private const val CHECKPOINT_WARNING_NOTIFICATION_ID = 3
 private const val GATE_CLOSED_NOTIFICATION_ID = 4
 private const val GATE_OPENED_NOTIFICATION_ID = 5
 
-private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
+private val CLOCK = DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
 
 private fun steps(value: Double): String =
     NumberFormat.getIntegerInstance(Locale.getDefault()).format(value.toLong())
