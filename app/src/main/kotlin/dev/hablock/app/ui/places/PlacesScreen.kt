@@ -59,7 +59,7 @@ fun PlacesScreen(modifier: Modifier = Modifier) {
         )
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var adding by remember { mutableStateOf(false) }
+    var preset by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -162,19 +162,32 @@ fun PlacesScreen(modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Button(onClick = { adding = true }) { Text(stringResource(R.string.settings_location_add_gym)) }
+                // Named types, because "add a place" makes a person invent a schema. Home is
+                // offered too: it is a label that exists to be excluded, not a requirement.
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "Gym" to false,
+                        "Home" to true,
+                        "Work" to false,
+                    ).forEach { (label, isHome) ->
+                        TextButton(onClick = { preset = label to isHome }) { Text(label) }
+                    }
+                    TextButton(onClick = { preset = "" to false }) { Text(stringResource(R.string.places_custom)) }
+                }
             }
         }
 
         Spacer(Modifier.height(150.dp))
     }
 
-    if (adding) {
+    preset?.let { (label, isHome) ->
         AddPlaceDialog(
-            onDismiss = { adding = false },
+            initialName = label,
+            initialHome = isHome,
+            onDismiss = { preset = null },
             onSave = { name, lat, lon, radius, home ->
                 viewModel.addPlace(name, lat, lon, radius, excluded = home)
-                adding = false
+                preset = null
             },
         )
     }
@@ -182,14 +195,16 @@ fun PlacesScreen(modifier: Modifier = Modifier) {
 
 @Composable
 private fun AddPlaceDialog(
+    initialName: String,
+    initialHome: Boolean,
     onDismiss: () -> Unit,
     onSave: (String, Double, Double, Double, Boolean) -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(initialName) }
     var radius by remember { mutableStateOf("150") }
     var lat by remember { mutableStateOf("") }
     var lon by remember { mutableStateOf("") }
-    var home by remember { mutableStateOf(false) }
+    var home by remember { mutableStateOf(initialHome) }
     val latValue = lat.toDoubleOrNull()
     val lonValue = lon.toDoubleOrNull()
     val ready = latValue != null && lonValue != null &&
