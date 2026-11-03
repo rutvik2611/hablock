@@ -57,11 +57,14 @@ def wv(n):
 
 
 def enc_pairs(pairs):
+    """PreferencesProto.PreferenceMap: entries live inside field 1, each {key=1, value=2{string=5}}."""
     out = bytearray()
     for key, value in pairs:
-        out += wv((1 << 3) | 2) + wv(len(key)) + key.encode()
+        entry = bytearray()
+        entry += wv((1 << 3) | 2) + wv(len(key)) + key.encode()
         inner = wv((5 << 3) | 2) + wv(len(value)) + value.encode()
-        out += wv((2 << 3) | 2) + wv(len(inner)) + inner
+        entry += wv((2 << 3) | 2) + wv(len(inner)) + inner
+        out += wv((1 << 3) | 2) + wv(len(entry)) + entry
     return bytes(out)
 
 
