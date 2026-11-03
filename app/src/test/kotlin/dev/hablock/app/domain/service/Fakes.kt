@@ -101,6 +101,7 @@ class FakeAlarmScheduler : AlarmScheduler {
     val cancelledSessions = mutableListOf<String>()
     val dayResets = mutableListOf<Instant>()
     val relinquishReady = mutableListOf<Instant>()
+    val deadlines = mutableListOf<Instant>()
     var cancelRelinquishReadyCount = 0
         private set
 
@@ -114,6 +115,10 @@ class FakeAlarmScheduler : AlarmScheduler {
 
     override fun scheduleDayReset(at: Instant) {
         dayResets += at
+    }
+
+    override fun scheduleDeadline(at: Instant) {
+        deadlines += at
     }
 
     override fun scheduleRelinquishReady(at: Instant) {

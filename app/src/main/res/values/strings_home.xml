@@ -18,6 +18,8 @@
     <string name="home_card_status_open_until">Open until %1$s</string>
     <string name="home_card_status_open">Open — go ahead</string>
     <string name="home_card_status_locked">Locked · %1$d of %2$d so far</string>
+    <string name="home_card_status_warn">Locks at %1$s · %2$s left</string>
+    <string name="home_card_deadline_left">until the gate closes</string>
     <string name="home_card_of">of %1$d</string>
     <string name="home_card_session_left">left in this session</string>
     <string name="home_card_click_label">Show details</string>

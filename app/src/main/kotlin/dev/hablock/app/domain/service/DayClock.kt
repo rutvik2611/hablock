@@ -31,6 +31,22 @@ class DayClock(
     fun nextReset(now: Instant = now()): Instant =
         resetAt(dayStart(now).atZone(zone).toLocalDate().plusDays(1))
 
+    /** The moment the gate closes for the day if the goal is still unmet. */
+    fun deadline(now: Instant = now()): Instant =
+        deadlineAt(dayStart(now).atZone(zone).toLocalDate())
+
+    fun isPastDeadline(now: Instant = now()): Boolean = !now.isBefore(deadline(now))
+
+    /** Zero once the deadline has passed. */
+    fun untilDeadline(now: Instant = now()): java.time.Duration =
+        java.time.Duration.between(now, deadline(now)).coerceAtLeast(java.time.Duration.ZERO)
+
+    private fun deadlineAt(date: LocalDate): Instant = ZonedDateTime.of(
+        date,
+        java.time.LocalTime.of(GateConstants.DEADLINE_HOUR, GateConstants.DEADLINE_MINUTE),
+        zone,
+    ).toInstant()
+
     private fun resetAt(date: LocalDate): Instant =
         ZonedDateTime.of(date, java.time.LocalTime.of(GateConstants.DAY_RESET_HOUR, 0), zone).toInstant()
 }

@@ -124,6 +124,48 @@ class GateEvaluatorTest {
         assertIs<GateState.Open>(evaluator.evaluate(block, dayState, snapshot, now))
     }
 
+    // --- deadline mode -------------------------------------------------------
+
+    private val deadlineAt: Instant = now.plusSeconds(7 * 3600)
+
+    @Test
+    fun `before the deadline an unmet goal warns and does not lock`() {
+        val block = testBlock(conditions = conditions, thresholdN = 1)
+        val state = evaluator.evaluate(block, null, snapshotOf("steps" to 4_000.0), now, deadlineAt)
+        assertIs<GateState.Warn>(state)
+        assertEquals(deadlineAt, state.deadline)
+        assertEquals(0, state.metCount)
+    }
+
+    @Test
+    fun `at the deadline instant the gate locks`() {
+        val block = testBlock(conditions = conditions, thresholdN = 1)
+        assertIs<GateState.Locked>(evaluator.evaluate(block, null, snapshotOf(), deadlineAt))
+    }
+
+    @Test
+    fun `after the deadline an unmet goal stays locked`() {
+        val block = testBlock(conditions = conditions, thresholdN = 1)
+        val later = deadlineAt.plusSeconds(3600)
+        assertIs<GateState.Locked>(evaluator.evaluate(block, null, snapshotOf(), later, deadlineAt))
+    }
+
+    @Test
+    fun `meeting the goal opens the gate before and after the deadline`() {
+        val block = testBlock(conditions = conditions, thresholdN = 1)
+        val met = snapshotOf("steps" to 10_000.0)
+        assertIs<GateState.Open>(evaluator.evaluate(block, null, met, now, deadlineAt))
+        assertIs<GateState.Open>(
+            evaluator.evaluate(block, null, met, deadlineAt.plusSeconds(60), deadlineAt),
+        )
+    }
+
+    @Test
+    fun `without a deadline the gate still locks immediately`() {
+        val block = testBlock(conditions = conditions, thresholdN = 1)
+        assertIs<GateState.Locked>(evaluator.evaluate(block, null, snapshotOf(), now))
+    }
+
     private fun dayState(
         requiredNow: Map<String, Double> = conditions.associate { it.id to it.goal },
         session: Session? = null,

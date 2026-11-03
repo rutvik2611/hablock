@@ -4,6 +4,7 @@ import dev.hablock.app.domain.enforcement.EnforcementBackend
 import dev.hablock.app.domain.model.Block
 import dev.hablock.app.domain.model.BlockDayState
 import dev.hablock.app.domain.model.Condition
+import dev.hablock.app.domain.model.ForegroundState
 import dev.hablock.app.domain.model.GateState
 import dev.hablock.app.domain.model.MetricSnapshot
 import dev.hablock.app.domain.repository.BlockRepository
@@ -39,11 +40,25 @@ class DefaultGateEngine(
     private val enforcement: EnforcementBackend,
     private val sessionDuration: Duration,
     scope: CoroutineScope,
+    private val deadlineMode: Boolean = false,
 ) : GateEngine {
 
     private val evaluator = GateEvaluator()
     private val mutex = Mutex()
+
+    /** Null in classic mode, so the evaluator locks immediately on an unmet goal. */
+    private fun deadlineFor(now: java.time.Instant): java.time.Instant? =
+        if (deadlineMode) dayClock.deadline(now) else null
+
+    /** Arms the closing alarm once per gate day; every process start and day reset goes through refresh(). */
+    private fun armDeadlineAlarm(now: java.time.Instant, dayKey: String) {
+        if (!deadlineMode || armedDeadlineDayKey == dayKey) return
+        armedDeadlineDayKey = dayKey
+        val at = dayClock.deadline(now)
+        if (at.isAfter(now)) alarmScheduler.scheduleDeadline(at)
+    }
     private val snapshotCache = mutableMapOf<String, SnapshotCacheEntry>()
+    private var armedDeadlineDayKey: String? = null
     private val _states = MutableStateFlow<Map<String, GateState>>(emptyMap())
 
     @Volatile
@@ -74,12 +89,13 @@ class DefaultGateEngine(
             val evaluated = affected.map { block ->
                 val dayState = expireSession(resolveDayState(block, dayKey), now)
                 val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics = false)
-                Evaluated(block, dayState, snapshot, evaluator.evaluate(block, dayState, snapshot, now))
+                Evaluated(block, dayState, snapshot, evaluator.evaluate(block, dayState, snapshot, now, deadlineFor(now)))
             }
             val locked = evaluated.firstOrNull { it.gateState is GateState.Locked }
             if (locked != null) {
                 enforcement.showBlocked(packageName, locked.block.id)
-            } else {
+            } else if (!deadlineMode) {
+                // Deadline mode keeps an earned day open: no sessions to start.
                 evaluated.filter { it.gateState is GateState.Open }.forEach { startSession(it, now) }
             }
             refresh(blocks, refreshMetrics = false)
@@ -121,6 +137,21 @@ class DefaultGateEngine(
         }
     }
 
+    override suspend fun onDeadlineReached() {
+        mutex.withLock {
+            val blocks = loadBlocks()
+            refresh(blocks, refreshMetrics = true)
+            if (!deadlineMode) return@withLock
+            // Cover whatever is already on screen; the accessibility service otherwise only reacts
+            // to foreground changes, so an app opened at 16:59 would stay usable all evening.
+            val current = ForegroundState.packageName ?: return@withLock
+            val blocking = blocks.firstOrNull { block ->
+                block.enabled && current in block.blockedPackages && states.value[block.id] is GateState.Locked
+            } ?: return@withLock
+            enforcement.showBlocked(current, blocking.id)
+        }
+    }
+
     /** An in-flight session survives the reset on a base-goal day state; an expired one takes its alarm with it. */
     private suspend fun carryOver(block: Block, dayKey: String, now: Instant): BlockDayState? {
         val session = gateStateRepository.get(block.id)?.activeSession ?: return null
@@ -135,16 +166,18 @@ class DefaultGateEngine(
         val now = dayClock.now()
         val dayKey = dayClock.dayKey(now)
         val (from, to) = dayClock.dayWindow(now)
+        armDeadlineAlarm(now, dayKey)
         val previous = _states.value
-        val autoStart = !enforcement.reportsForegroundUse()
+        val autoStart = !deadlineMode && !enforcement.reportsForegroundUse()
         val next = mutableMapOf<String, GateState>()
         for (block in blocks.filter { it.enabled }) {
             val dayState = expireSession(resolveDayState(block, dayKey), now)
             val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics)
-            var state = evaluator.evaluate(block, dayState, snapshot, now)
+            val deadline = deadlineFor(now)
+            var state = evaluator.evaluate(block, dayState, snapshot, now, deadline)
             if (autoStart && state is GateState.Open && justUnlocked(previous[block.id], dayState)) {
                 startSession(Evaluated(block, dayState, snapshot, state), now)?.let {
-                    state = evaluator.evaluate(block, it, snapshot, now)
+                    state = evaluator.evaluate(block, it, snapshot, now, deadline)
                 }
             }
             next[block.id] = state

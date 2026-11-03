@@ -43,6 +43,9 @@ import dev.hablock.app.ui.components.ConditionMeter
 import dev.hablock.app.ui.components.MorphingGateBadge
 import dev.hablock.app.ui.components.rememberTicker
 import dev.hablock.app.ui.format.formatClock
+import dev.hablock.app.ui.format.formatCountdown
+import java.time.Instant
+import kotlin.time.Duration.Companion.milliseconds
 import dev.hablock.app.ui.theme.numeralStyle
 
 /**
@@ -62,6 +65,7 @@ fun BlockCard(
     val paused = !block.enabled
     val session = state as? GateState.SessionActive
     val open = state is GateState.Open
+    val warn = state as? GateState.Warn
     val met = state?.metCount ?: 0
     val threshold = block.thresholdN.coerceIn(1, block.conditions.size.coerceAtLeast(1))
 
@@ -70,6 +74,7 @@ fun BlockCard(
             paused -> MaterialTheme.colorScheme.surfaceContainerLowest
             session != null -> MaterialTheme.colorScheme.tertiaryContainer
             open -> MaterialTheme.colorScheme.primaryContainer
+            warn != null -> MaterialTheme.colorScheme.surfaceContainerHigh
             else -> MaterialTheme.colorScheme.surfaceContainerLow
         },
         label = "container",
@@ -119,7 +124,7 @@ fun BlockCard(
                 ) {
                     Text(block.name, style = MaterialTheme.typography.titleLargeEmphasized, textAlign = TextAlign.Center)
                     Text(
-                        statusLine(paused, session, open, met, threshold),
+                        statusLine(paused, state, met, threshold),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -137,6 +142,7 @@ fun BlockCard(
                     if (session != null) {
                         SessionCountdown(session)
                     } else {
+                        if (warn != null) DeadlineCountdown(warn.deadline)
                         MetCountPanel(met, threshold, open)
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             state?.progress?.forEach { item ->
@@ -151,13 +157,45 @@ fun BlockCard(
 }
 
 @Composable
-private fun statusLine(paused: Boolean, session: GateState.SessionActive?, open: Boolean, met: Int, threshold: Int): String =
-    when {
-        paused -> stringResource(R.string.home_card_status_paused)
-        session != null -> stringResource(R.string.home_card_status_open_until, formatClock(session.endsAt))
-        open -> stringResource(R.string.home_card_status_open)
-        else -> stringResource(R.string.home_card_status_locked, met, threshold)
+private fun statusLine(paused: Boolean, state: GateState?, met: Int, threshold: Int): String = when {
+    paused -> stringResource(R.string.home_card_status_paused)
+    state is GateState.SessionActive -> stringResource(R.string.home_card_status_open_until, formatClock(state.endsAt))
+    state is GateState.Open -> stringResource(R.string.home_card_status_open)
+    state is GateState.Warn -> stringResource(
+        R.string.home_card_status_warn,
+        formatClock(state.deadline),
+        remainingLabel(state.deadline),
+    )
+    else -> stringResource(R.string.home_card_status_locked, met, threshold)
+}
+
+/** Live "3h 12m" until the deadline, recomputed every 30 s so the card stays honest without churn. */
+@Composable
+private fun remainingLabel(deadline: Instant): String {
+    val tick by rememberTicker(30_000L)
+    val remaining = (deadline.toEpochMilli() - tick).coerceAtLeast(0L).milliseconds
+    return formatCountdown(remaining)
+}
+
+/** The countdown strip shown while the gate is still open but the deadline is approaching. */
+@Composable
+private fun DeadlineCountdown(deadline: Instant) {
+    val tick by rememberTicker(1_000L)
+    val remaining = (deadline.toEpochMilli() - tick).coerceAtLeast(0L).milliseconds
+    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BigNumerals(
+            formatCountdown(remaining),
+            style = numeralStyle(44.sp),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            stringResource(R.string.home_card_deadline_left),
+            Modifier.padding(bottom = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
+}
 
 /** The big "2 of 3" numeral in a tonal container — the clock-screen look. */
 @Composable

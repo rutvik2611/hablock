@@ -15,6 +15,9 @@ interface GateEngine {
     suspend fun onAppForegrounded(packageName: String)
     suspend fun onSessionExpired(blockId: String)
     suspend fun onDayReset()
+
+    /** Fired by the deadline alarm: re-evaluate and cover whatever is already on screen. */
+    suspend fun onDeadlineReached()
     suspend fun deleteBlock(blockId: String)
 }
 
@@ -26,6 +29,7 @@ interface AlarmScheduler {
     fun scheduleSessionEnd(blockId: String, at: Instant)
     fun cancelSessionEnd(blockId: String)
     fun scheduleDayReset(at: Instant)
+    fun scheduleDeadline(at: Instant)
     fun scheduleRelinquishReady(at: Instant)
     fun cancelRelinquishReady()
 }

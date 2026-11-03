@@ -13,6 +13,7 @@ import java.time.Instant
 private const val DAY_RESET_REQUEST_CODE = 0
 private const val RELINQUISH_READY_REQUEST_CODE = 1
 private const val SESSION_REQUEST_CODE = 2
+private const val DEADLINE_REQUEST_CODE = 3
 private const val INEXACT_WINDOW_MILLIS = 2 * 60 * 1000L
 
 class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
@@ -36,6 +37,17 @@ class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             DAY_RESET_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        schedule(pendingIntent, at)
+    }
+
+    override fun scheduleDeadline(at: Instant) {
+        val intent = Intent(context, AlarmReceiver::class.java).setAction(GateConstants.ACTION_DEADLINE_REACHED)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            DEADLINE_REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

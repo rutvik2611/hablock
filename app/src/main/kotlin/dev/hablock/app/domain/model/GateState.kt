@@ -24,6 +24,16 @@ sealed interface GateState {
         val thresholdN: Int,
     ) : GateState
 
+    /**
+     * Before the deadline with the goal unmet: the apps are still open, but the card warns that the
+     * gate closes at [deadline]. Enforcement must treat this as "not blocked".
+     */
+    data class Warn(
+        override val progress: List<ConditionProgress>,
+        val thresholdN: Int,
+        val deadline: Instant,
+    ) : GateState
+
     data class SessionActive(
         override val progress: List<ConditionProgress>,
         val endsAt: Instant,

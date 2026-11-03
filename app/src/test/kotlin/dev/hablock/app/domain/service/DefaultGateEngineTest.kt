@@ -2,6 +2,7 @@ package dev.hablock.app.domain.service
 
 import dev.hablock.app.domain.model.BlockDayState
 import dev.hablock.app.domain.model.Condition
+import dev.hablock.app.domain.model.ForegroundState
 import dev.hablock.app.domain.model.GateState
 import java.time.Instant
 import java.time.ZoneId
@@ -37,7 +38,7 @@ class DefaultGateEngineTest {
     private val notifier = FakeNotifier()
     private val enforcement = FakeEnforcement()
 
-    private fun newEngine(scope: CoroutineScope) = DefaultGateEngine(
+    private fun newEngine(scope: CoroutineScope, deadlineMode: Boolean = false) = DefaultGateEngine(
         blockRepository = blockRepository,
         gateStateRepository = gateStateRepository,
         metricProvider = metricProvider,
@@ -47,6 +48,7 @@ class DefaultGateEngineTest {
         enforcement = enforcement,
         sessionDuration = 30.minutes,
         scope = scope,
+        deadlineMode = deadlineMode,
     )
 
     @Test
@@ -308,5 +310,64 @@ class DefaultGateEngineTest {
 
         assertEquals(setOf("b1"), engine.states.value.keys)
         assertEquals(listOf(engine.states.value), enforcement.applied)
+    }
+
+    // --- deadline mode -------------------------------------------------------
+
+    @Test
+    fun `deadline mode stays open until five and arms the closing alarm`() = runTest {
+        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, deadlineMode = true)
+        engine.refreshAll() // clock is 11:00 Berlin, deadline 17:00 Berlin
+
+        assertIs<GateState.Warn>(engine.states.value.getValue("b1"))
+        assertTrue(enforcement.blocked.isEmpty())
+        assertTrue(alarmScheduler.sessionEnds.isEmpty())
+        assertEquals(Instant.parse("2026-08-23T15:00:00Z"), alarmScheduler.deadlines.single())
+    }
+
+    @Test
+    fun `deadline mode locks once five in the afternoon has passed`() = runTest {
+        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, deadlineMode = true)
+        clock.current = Instant.parse("2026-08-23T15:00:01Z")
+        engine.refreshAll()
+
+        assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+    }
+
+    @Test
+    fun `deadline mode opens for the rest of the day when the goal is met`() = runTest {
+        metricProvider.values = mapOf("steps" to 10_000.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, deadlineMode = true)
+        engine.refreshAll()
+
+        assertIs<GateState.Open>(engine.states.value.getValue("b1"))
+        assertTrue(alarmScheduler.sessionEnds.isEmpty(), "deadline mode must not spend the day in sessions")
+        assertTrue(enforcement.blocked.isEmpty())
+    }
+
+    @Test
+    fun `deadline alarm covers the app that is already on screen`() = runTest {
+        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, deadlineMode = true)
+        clock.current = Instant.parse("2026-08-23T15:00:00Z")
+        ForegroundState.packageName = SOCIAL
+        try {
+            engine.onDeadlineReached()
+            assertEquals(listOf(SOCIAL to "b1"), enforcement.blocked)
+        } finally {
+            ForegroundState.packageName = null
+        }
+    }
+
+    @Test
+    fun `classic mode is untouched by the deadline plumbing`() = runTest {
+        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, deadlineMode = false)
+        engine.refreshAll()
+
+        assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+        assertTrue(alarmScheduler.deadlines.isEmpty())
     }
 }

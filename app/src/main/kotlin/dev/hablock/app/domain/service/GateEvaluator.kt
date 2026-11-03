@@ -7,7 +7,12 @@ import dev.hablock.app.domain.model.GateState
 import dev.hablock.app.domain.model.MetricSnapshot
 import java.time.Instant
 
-/** Pure N-of-M gate decision; a block without conditions is permanently locked. */
+/**
+ * Pure N-of-M gate decision; a block without conditions is permanently locked.
+ *
+ * [deadline] is null for the classic session gate (unmet goals lock immediately). With a deadline,
+ * an unmet goal yields [GateState.Warn] until that instant and [GateState.Locked] from then on.
+ */
 class GateEvaluator {
 
     fun evaluate(
@@ -15,6 +20,7 @@ class GateEvaluator {
         dayState: BlockDayState?,
         snapshot: MetricSnapshot,
         now: Instant,
+        deadline: Instant? = null,
     ): GateState {
         val progress = progressOf(block, dayState, snapshot)
         val session = dayState?.activeSession
@@ -24,10 +30,10 @@ class GateEvaluator {
         if (block.conditions.isEmpty()) return GateState.Locked(emptyList(), block.thresholdN)
         val threshold = effectiveThreshold(block)
         val met = progress.count { it.met }
-        return if (met >= threshold) {
-            GateState.Open(progress, threshold)
-        } else {
-            GateState.Locked(progress, threshold)
+        return when {
+            met >= threshold -> GateState.Open(progress, threshold)
+            deadline != null && now.isBefore(deadline) -> GateState.Warn(progress, threshold, deadline)
+            else -> GateState.Locked(progress, threshold)
         }
     }
 
