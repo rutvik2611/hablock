@@ -464,4 +464,18 @@ class DefaultGateEngineTest {
         assertTrue(enforcement.blocked.isEmpty())
         assertIs<GateState.Override>(engine.states.value.getValue("b1"))
     }
+
+    @Test
+    fun `locking now ends an override immediately`() = runTest {
+        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        clock.current = Instant.parse("2026-08-23T10:05:00Z") // 12:05 Berlin, short of noon
+        engine.grantOverride(60)
+        assertIs<GateState.Override>(engine.states.value.getValue("b1"))
+
+        engine.clearOverride()
+
+        assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+        assertNull(overrideStore.until())
+    }
 }

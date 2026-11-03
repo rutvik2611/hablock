@@ -216,6 +216,13 @@ class DefaultGateEngine(
         }
     }
 
+    override suspend fun clearOverride() {
+        mutex.withLock {
+            overrideStore.clear()
+            refresh(loadBlocks(), refreshMetrics = true)
+        }
+    }
+
     /** An in-flight session survives the reset on a base-goal day state; an expired one takes its alarm with it. */
     private suspend fun carryOver(block: Block, dayKey: String, now: Instant): BlockDayState? {
         val session = gateStateRepository.get(block.id)?.activeSession ?: return null

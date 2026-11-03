@@ -72,7 +72,7 @@ class AppContainer(context: Context) {
     val permissionChecker: PermissionChecker by lazy { AndroidPermissionChecker(appContext) }
     val deviceOwnerController: DeviceOwnerController by lazy { DevicePolicyController(appContext) }
     private val suspensionStore: SuspensionStore by lazy { DataStoreSuspensionStore(dataStore) }
-    private val overrideStore: OverrideStore by lazy { DataStoreOverrideStore(dataStore) }
+    val overrideStore: OverrideStore by lazy { DataStoreOverrideStore(dataStore) }
 
     val alarmScheduler: AlarmScheduler by lazy { AndroidAlarmScheduler(appContext) }
     val notifier: Notifier by lazy {

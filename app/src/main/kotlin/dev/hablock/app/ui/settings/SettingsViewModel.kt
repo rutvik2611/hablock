@@ -23,6 +23,7 @@ data class SettingsUiState(
     val relinquishFailed: Boolean = false,
     val healthSupported: Boolean = true,
     val health: Boolean = false,
+    val overrideUntil: java.time.Instant? = null,
 )
 
 class SettingsViewModel(
@@ -30,6 +31,8 @@ class SettingsViewModel(
     private val deviceOwnerController: DeviceOwnerController,
     private val relinquishTimer: RelinquishTimer,
     private val healthRepository: HealthRepository,
+    private val overrideStore: dev.hablock.app.domain.service.OverrideStore,
+    private val gateEngine: dev.hablock.app.domain.service.GateEngine,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -48,6 +51,9 @@ class SettingsViewModel(
             deviceOwner = deviceOwnerController.isDeviceOwner(),
         )
         viewModelScope.launch {
+            val until = runCatching { overrideStore.until() }.getOrNull()
+            val active = until?.takeIf { it.isAfter(java.time.Instant.now()) }
+            _uiState.value = _uiState.value.copy(overrideUntil = active)
             val availability = runCatching { healthRepository.availability() }.getOrDefault(HcAvailability.UNAVAILABLE)
             val granted = runCatching { healthRepository.hasAllPermissions() }.getOrDefault(false)
             _uiState.value = _uiState.value.copy(
@@ -55,6 +61,12 @@ class SettingsViewModel(
                 health = granted,
             )
         }
+    }
+
+    /** End a temporary unlock now instead of waiting for it to run out. */
+    fun lockNow() = viewModelScope.launch {
+        gateEngine.clearOverride()
+        refresh()
     }
 
     fun startRelinquish() = viewModelScope.launch { relinquishTimer.start() }

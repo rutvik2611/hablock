@@ -27,6 +27,9 @@ interface GateEngine {
 
     /** Opens every block for [minutes] and records who-did-what when it expires. */
     suspend fun grantOverride(minutes: Int)
+
+    /** Drops an active override and re-locks immediately. */
+    suspend fun clearOverride()
     suspend fun deleteBlock(blockId: String)
 }
 

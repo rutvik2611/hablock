@@ -58,6 +58,7 @@ import dev.hablock.app.ui.components.HablockDialog
 import dev.hablock.app.ui.components.SectionHeader
 import dev.hablock.app.ui.components.StatusChip
 import dev.hablock.app.ui.components.rememberTicker
+import dev.hablock.app.ui.format.formatClock
 import dev.hablock.app.ui.format.formatCountdown
 import dev.hablock.app.ui.gateViewModel
 import dev.hablock.app.ui.system.openAccessibilitySettings
@@ -77,6 +78,8 @@ fun SettingsScreen() {
             container.deviceOwnerController,
             container.relinquishTimer,
             container.healthRepository,
+            container.overrideStore,
+            container.gateEngine,
         )
     }
     val healthLauncher = rememberLauncherForActivityResult(
@@ -118,6 +121,18 @@ fun SettingsScreen() {
         ) {
             val hasExactAlarms = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
             SectionHeader(stringResource(R.string.settings_section_enforcement))
+            uiState.overrideUntil?.let { until ->
+                GroupedListItem(
+                    position = GroupPosition.First,
+                    title = stringResource(R.string.settings_override_active, formatClock(until)),
+                    supporting = stringResource(R.string.settings_override_body),
+                    trailing = {
+                        TextButton(onClick = { viewModel.lockNow() }) {
+                            Text(stringResource(R.string.settings_lock_now))
+                        }
+                    },
+                )
+            }
             GrantItem(
                 position = GroupPosition.First,
                 index = 0,

@@ -43,4 +43,7 @@
     <string name="settings_guide_adb_command" translatable="false">adb shell dpm set-device-owner dev.hablock.app/.system.HablockDeviceAdminReceiver</string>
     <string name="settings_guide_copy_command">Copy command</string>
     <string name="settings_guide_warning">This works only on a freshly reset device with no accounts. Once Hablock owns the device, the only way back is the 3-day relinquish timer below.</string>
+    <string name="settings_override_active">Temporarily unlocked until %1$s</string>
+    <string name="settings_override_body">Apps are open. Lock them again now, or let the timer run out.</string>
+    <string name="settings_lock_now">Lock now</string>
 </resources>
