@@ -15,7 +15,7 @@ object OverrideCode {
     fun matches(input: String): Boolean {
         if (input.isBlank()) return false
         val candidate = MessageDigest.getInstance("SHA-256")
-            .digest(input.trim().toByteArray(Charsets.UTF_8))
+            .digest(input.trim().lowercase().toByteArray(Charsets.UTF_8))
         return MessageDigest.isEqual(candidate, DIGEST.hexToBytes())
     }
 

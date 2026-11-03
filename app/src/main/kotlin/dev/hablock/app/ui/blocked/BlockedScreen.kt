@@ -38,6 +38,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -235,6 +236,11 @@ fun BlockedScreen(
                         onValueChange = { code = it; wrongCode = false },
                         label = { Text(stringResource(R.string.blocked_unlock_code_label)) },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            autoCorrectEnabled = false,
+                            capitalization = KeyboardCapitalization.None,
+                        ),
                         isError = wrongCode,
                         visualTransformation = PasswordVisualTransformation(),
                         supportingText = if (wrongCode) {

@@ -56,6 +56,9 @@ class HomeViewModel(
         }
     }
 
+    /** Switching a block off is a change to the rules, so it needs the household password. */
+    fun codeAccepted(input: String): Boolean = dev.hablock.app.domain.model.OverrideCode.matches(input)
+
     fun delete(blockId: String) {
         viewModelScope.launch { gateEngine.deleteBlock(blockId) }
     }
