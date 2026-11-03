@@ -22,6 +22,14 @@ object HablockIcons {
         )
     }
 
+    /** Material Symbols `location_on`, for place conditions. */
+    val Place: ImageVector by lazy {
+        materialSymbol(
+            "Hablock.Place",
+            "M480-480q33 0 56.5-23.5T560-560q0-33-23.5-56.5T480-640q-33 0-56.5 23.5T400-560q0 33 23.5 56.5T480-480Zm0 294q122-112 181-203.5T720-560q0-109-69.5-188.5T480-828q-80 0-149.5 79.5T240-560q0 91 59 182.5T480-186Z",
+        )
+    }
+
     /** Material Symbols `self_improvement`. */
     val Meditate: ImageVector by lazy {
         materialSymbol(

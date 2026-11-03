@@ -204,4 +204,69 @@ class GateEvaluatorTest {
         requiredNow: Map<String, Double> = conditions.associate { it.id to it.goal },
         session: Session? = null,
     ) = BlockDayState(blockId = "b1", dayKey = "2026-08-23", requiredNow = requiredNow, activeSession = session)
+
+    // ---- place conditions: the gym rule ----
+
+    private val nyc = java.time.ZoneId.of("America/New_York")
+    private val beforeGymDeadline: Instant = java.time.ZonedDateTime.of(2026, 8, 23, 19, 0, 0, 0, nyc).toInstant()
+    private val afterGymDeadline: Instant = java.time.ZonedDateTime.of(2026, 8, 23, 20, 1, 0, 0, nyc).toInstant()
+
+    private fun gymBlock(places: List<String> = emptyList(), minutes: Double = 30.0) = testBlock(
+        conditions = listOf(Condition.PlaceVisit("gym", minutes, deadlineHour = 20, placeIds = places)),
+        thresholdN = 1,
+    )
+
+    @Test
+    fun `a place block is open before its own deadline`() {
+        val state = evaluator.evaluate(
+            gymBlock(), null, snapshotOf("gym" to 0.0), beforeGymDeadline, zone = nyc,
+        )
+        assertIs<GateState.Open>(state)
+    }
+
+    @Test
+    fun `a place block locks once its deadline passes unmet`() {
+        val state = evaluator.evaluate(
+            gymBlock(), null, snapshotOf("gym" to 0.0), afterGymDeadline, zone = nyc,
+        )
+        assertIs<GateState.Locked>(state)
+        assertEquals(30.0, state.progress.single().required, EPS)
+    }
+
+    @Test
+    fun `a place block reopens the moment the minutes are reached`() {
+        val state = evaluator.evaluate(
+            gymBlock(), null, snapshotOf("gym" to 30.0), afterGymDeadline, zone = nyc,
+        )
+        assertIs<GateState.Open>(state)
+    }
+
+    @Test
+    fun `step checkpoints never satisfy a place block`() {
+        // 12:00 and 17:00 checkpoints are both past; 20,000 steps must still not open the gym gate.
+        val checkpoints = listOf(StepCheckpoint(noon, 4_000.0), StepCheckpoint(evening, 10_000.0))
+        val state = evaluator.evaluate(
+            gymBlock(), null, snapshotOf("gym" to 0.0), afterGymDeadline, checkpoints, nyc,
+        )
+        assertIs<GateState.Locked>(state)
+    }
+
+    @Test
+    fun `meeting steps does not excuse the place, and meeting the place does not excuse steps`() {
+        val mixed = testBlock(
+            conditions = listOf(
+                Condition.Steps("steps", 10_000.0),
+                Condition.PlaceVisit("gym", 30.0, deadlineHour = 20),
+            ),
+            thresholdN = 2,
+        )
+        val stepsOnly = evaluator.evaluate(
+            mixed, null, snapshotOf("steps" to 12_000.0, "gym" to 0.0), afterGymDeadline, emptyList(), nyc,
+        )
+        assertIs<GateState.Locked>(stepsOnly)
+        val placeOnly = evaluator.evaluate(
+            mixed, null, snapshotOf("steps" to 0.0, "gym" to 45.0), afterGymDeadline, emptyList(), nyc,
+        )
+        assertIs<GateState.Locked>(placeOnly)
+    }
 }

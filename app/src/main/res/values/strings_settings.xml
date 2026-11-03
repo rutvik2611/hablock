@@ -54,6 +54,14 @@
     <string name="settings_location_radius">%1$d m radius</string>
     <string name="settings_location_remove">Remove</string>
     <string name="settings_location_add">Add this place</string>
+    <string name="settings_location_any_place">Any tracked place</string>
+    <string name="settings_location_any_place_hint">Counts time at any of these places</string>
+    <string name="settings_location_add_gym">Add a gym</string>
+    <string name="settings_location_gym_hint">Pick one as the default with the radio, or add another gym.</string>
+    <string name="settings_location_gym_help">Type the coordinates, or use the current location while standing there.</string>
+    <string name="settings_location_latitude">Latitude</string>
+    <string name="settings_location_longitude">Longitude</string>
+    <string name="settings_location_use_here">Use current location</string>
     <string name="settings_location_add_hint">Stand at the place, then add it with the radius you want.</string>
     <string name="settings_location_need_permission">Grant location access first.</string>
     <string name="settings_location_name">Name</string>

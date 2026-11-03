@@ -34,6 +34,7 @@
 
     <string name="condition_steps">Steps</string>
     <string name="condition_workout">Workout</string>
+    <string name="condition_place">Time at a place</string>
     <string name="condition_meditation">Meditation</string>
     <string name="format_minutes_value">%1$d min</string>
     <string name="format_progress">%1$s / %2$s</string>

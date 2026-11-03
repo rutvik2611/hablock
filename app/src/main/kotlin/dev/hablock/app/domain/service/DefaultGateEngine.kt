@@ -78,9 +78,17 @@ class DefaultGateEngine(
         return !DwellTracker.isSatisfied(day, config)
     }
 
-    /** While a location requirement exists, sample location on a timer so dwell time accumulates. */
+    /**
+     * While a location requirement exists, sample location on a timer so dwell time accumulates.
+     * A per-block place condition needs the samples even when the global location rule is switched off.
+     */
     private suspend fun armLocationSampling(now: Instant) {
-        if (!locationStore.config().enabled) return
+        val config = locationStore.config()
+        val blockNeedsPlaces = knownBlocks.orEmpty().any { block ->
+            block.enabled && block.conditions.any { it is dev.hablock.app.domain.model.Condition.PlaceVisit }
+        }
+        val needed = config.enabled || blockNeedsPlaces
+        if (!needed || config.places.isEmpty()) return
         alarmScheduler.scheduleLocationSample(now.plusMillis(GateConstants.LOCATION_SAMPLE_INTERVAL.inWholeMilliseconds))
     }
 

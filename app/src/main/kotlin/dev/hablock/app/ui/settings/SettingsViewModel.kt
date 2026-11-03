@@ -27,6 +27,7 @@ data class SettingsUiState(
     val locationEnabled: Boolean = false,
     val locationRequiredMinutes: Int = 30,
     val locationPlaces: List<dev.hablock.app.domain.model.TrackedPlace> = emptyList(),
+    val locationDefaultPlaceId: String? = null,
     val locationMinutesToday: Long = 0,
     val fineLocation: Boolean = false,
     val backgroundLocation: Boolean = false,
@@ -72,6 +73,7 @@ class SettingsViewModel(
                 locationEnabled = rule.enabled,
                 locationRequiredMinutes = rule.requiredMinutes,
                 locationPlaces = rule.places,
+                locationDefaultPlaceId = rule.defaultPlaceId,
                 locationMinutesToday = (day?.accumulatedMillis ?: 0L) / 60_000L,
             )
             val availability = runCatching { healthRepository.availability() }.getOrDefault(HcAvailability.UNAVAILABLE)
@@ -115,10 +117,44 @@ class SettingsViewModel(
 
     fun removePlace(id: String) = viewModelScope.launch {
         val rule = locationStore.config()
-        locationStore.saveConfig(rule.copy(places = rule.places.filterNot { it.id == id }))
+        locationStore.saveConfig(
+            rule.copy(
+                places = rule.places.filterNot { it.id == id },
+                defaultPlaceId = rule.defaultPlaceId?.takeIf { it != id },
+            ),
+        )
         gateEngine.refreshAll()
         refresh()
     }
+
+    /** The radio selection: the gym new place conditions start on. Null means "any tracked place". */
+    fun setDefaultPlace(id: String?) = viewModelScope.launch {
+        val rule = locationStore.config()
+        locationStore.saveConfig(rule.copy(defaultPlaceId = id))
+        refresh()
+    }
+
+    /** Adds a gym from typed coordinates, so it can be set up away from the building. */
+    fun addPlace(name: String, latitude: Double, longitude: Double, radiusMeters: Double) =
+        viewModelScope.launch {
+            val rule = locationStore.config()
+            val place = dev.hablock.app.domain.model.TrackedPlace(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name.ifBlank { "Gym ${rule.places.size + 1}" },
+                latitude = latitude,
+                longitude = longitude,
+                radiusMeters = radiusMeters.coerceIn(50.0, 2000.0),
+            )
+            locationStore.saveConfig(
+                rule.copy(
+                    enabled = true,
+                    places = rule.places + place,
+                    defaultPlaceId = rule.defaultPlaceId ?: place.id,
+                ),
+            )
+            gateEngine.refreshAll()
+            refresh()
+        }
 
     /** End a temporary unlock now instead of waiting for it to run out. */
     fun lockNow() = viewModelScope.launch {

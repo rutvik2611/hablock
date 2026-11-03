@@ -32,6 +32,21 @@ sealed class Condition {
         override val goal: Double,
     ) : Condition()
 
+    /**
+     * Minutes of presence at tracked places, binding once [deadlineHour] local passes.
+     *
+     * [placeIds] empty means "any tracked place"; naming specific places requires presence at one of
+     * them, so a block can point at one gym without being satisfied by another.
+     */
+    @Serializable
+    @SerialName("placeVisit")
+    data class PlaceVisit(
+        override val id: String,
+        override val goal: Double,
+        val deadlineHour: Int = 20,
+        val placeIds: List<String> = emptyList(),
+    ) : Condition()
+
     @Serializable
     @SerialName("meditation")
     data class Meditation(

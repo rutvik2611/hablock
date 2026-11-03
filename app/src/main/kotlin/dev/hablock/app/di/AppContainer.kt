@@ -94,7 +94,7 @@ class AppContainer(context: Context) {
     }
 
     val metricProvider: MetricProvider by lazy {
-        DefaultMetricProvider(usageStatsRepository, healthRepository)
+        DefaultMetricProvider(usageStatsRepository, healthRepository, locationStore)
     }
 
     private val accessibilityBackend: EnforcementBackend by lazy {

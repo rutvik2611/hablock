@@ -7,6 +7,8 @@ import dev.hablock.app.domain.model.Block
 import dev.hablock.app.domain.model.Condition
 import dev.hablock.app.domain.model.HcAvailability
 import dev.hablock.app.domain.model.InstalledApp
+import dev.hablock.app.domain.model.TrackedPlace
+import dev.hablock.app.domain.service.LocationStore
 import dev.hablock.app.domain.repository.BlockRepository
 import dev.hablock.app.domain.repository.HealthRepository
 import dev.hablock.app.domain.repository.InstalledAppsRepository
@@ -33,6 +35,7 @@ enum class ConditionKind(
     Workout("WORKOUT", 5, 180, 5, 45, true),
     Meditation("MEDITATION", 5, 60, 5, 10, true),
     AppUsage("APP USAGE", 5, 180, 5, 40, false),
+    PlaceVisit("PLACE", 5, 240, 5, 30, false),
 }
 
 data class ConditionDraft(
@@ -42,6 +45,9 @@ data class ConditionDraft(
     val value: Int = kind.default,
     val packageName: String? = null,
     val appLabel: String? = null,
+    /** Empty means "any tracked place"; otherwise the condition needs presence at one of these. */
+    val placeIds: List<String> = emptyList(),
+    val deadlineHour: Int = 20,
 ) {
     val ready: Boolean get() = selected && (kind != ConditionKind.AppUsage || packageName != null)
 }
@@ -59,6 +65,7 @@ data class WizardUiState(
     val name: String = "",
     val defaultBlockNumber: Int = 1,
     val availability: HcAvailability = HcAvailability.UNAVAILABLE,
+    val places: List<TrackedPlace> = emptyList(),
 ) {
     val activeDrafts: List<ConditionDraft> get() = drafts.filter { it.ready }
     val conditionCount: Int get() = activeDrafts.size
@@ -84,6 +91,8 @@ class BlockWizardViewModel(
     private val installedAppsRepository: InstalledAppsRepository,
     private val healthRepository: HealthRepository,
     private val gateEngine: GateEngine,
+    private val locationStore: LocationStore,
+    private val locationSampler: dev.hablock.app.system.LocationSampler? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WizardUiState())
@@ -102,12 +111,14 @@ class BlockWizardViewModel(
             val apps = runCatching { installedAppsRepository.launcherApps() }.getOrDefault(emptyList())
             val availability = runCatching { healthRepository.availability() }.getOrDefault(HcAvailability.UNAVAILABLE)
             val blocks = runCatching { blockRepository.current() }.getOrDefault(emptyList())
+            val places = runCatching { locationStore.config() }.getOrNull()?.places.orEmpty()
             existing = blocks.firstOrNull { it.id == blockId }
             _uiState.update { state ->
                 val base = state.copy(
                     loading = false,
                     apps = apps.sortedBy { it.label.lowercase() },
                     availability = availability,
+                    places = places,
                     defaultBlockNumber = blocks.size + 1,
                     editing = existing != null,
                     drafts = defaultDrafts(),
@@ -128,6 +139,13 @@ class BlockWizardViewModel(
                     value = match.goal.toInt(),
                     packageName = match.packageName,
                     appLabel = match.appLabel,
+                )
+                match is Condition.PlaceVisit -> draft.copy(
+                    id = match.id,
+                    selected = true,
+                    value = match.goal.toInt(),
+                    placeIds = match.placeIds,
+                    deadlineHour = match.deadlineHour,
                 )
                 else -> draft.copy(id = match.id, selected = true, value = match.goal.toInt())
             }
@@ -168,6 +186,59 @@ class BlockWizardViewModel(
             }
         }
         state.copy(selectedPackages = selected, drafts = drafts).clampThreshold()
+    }
+
+    /** Saves a gym the user typed in, so a place can be defined without standing in it. */
+    fun addPlace(name: String, latitude: Double, longitude: Double, radiusMeters: Double) =
+        viewModelScope.launch {
+            val rule = locationStore.config()
+            val place = TrackedPlace(
+                id = UUID.randomUUID().toString(),
+                name = name.ifBlank { "Gym ${rule.places.size + 1}" },
+                latitude = latitude,
+                longitude = longitude,
+                radiusMeters = radiusMeters.coerceIn(50.0, 2_000.0),
+            )
+            locationStore.saveConfig(rule.copy(enabled = true, places = rule.places + place))
+            _uiState.update { it.copy(places = it.places + place) }
+        }
+
+    /** Adds a gym at the phone's current fix. */
+    fun addPlaceHere(name: String, radiusMeters: Double) = viewModelScope.launch {
+        val fix = runCatching { locationSampler?.currentLocation() }.getOrNull() ?: return@launch
+        addPlace(name, fix.latitude, fix.longitude, radiusMeters)
+    }
+
+    fun removePlace(placeId: String) = viewModelScope.launch {
+        val rule = locationStore.config()
+        locationStore.saveConfig(rule.copy(places = rule.places.filterNot { it.id == placeId }))
+        _uiState.update { state ->
+            state.copy(
+                places = state.places.filterNot { it.id == placeId },
+                drafts = state.drafts.map { draft -> draft.copy(placeIds = draft.placeIds - placeId) },
+            )
+        }
+    }
+
+    /** Radio behaviour: a place condition binds to exactly one gym, or to all of them. */
+    fun selectPlace(id: String, placeId: String?) = _uiState.update { state ->
+        state.copy(
+            drafts = state.drafts.map { draft ->
+                if (draft.id == id) {
+                    draft.copy(placeIds = listOfNotNull(placeId))
+                } else {
+                    draft
+                }
+            },
+        )
+    }
+
+    fun setPlaceDeadline(id: String, hour: Int) = _uiState.update { state ->
+        state.copy(
+            drafts = state.drafts.map { draft ->
+                if (draft.id == id) draft.copy(deadlineHour = hour.coerceIn(0, 23)) else draft
+            },
+        )
     }
 
     fun toggleCondition(id: String) = _uiState.update { state ->
@@ -255,6 +326,7 @@ private fun Condition.matches(kind: ConditionKind): Boolean = when (this) {
     is Condition.Exercise -> kind == ConditionKind.Workout
     is Condition.Meditation -> kind == ConditionKind.Meditation
     is Condition.AppUsage -> kind == ConditionKind.AppUsage
+    is Condition.PlaceVisit -> kind == ConditionKind.PlaceVisit
 }
 
 private fun ConditionDraft.toCondition(): Condition = when (kind) {
@@ -266,6 +338,12 @@ private fun ConditionDraft.toCondition(): Condition = when (kind) {
         goal = value.toDouble(),
         packageName = requireNotNull(packageName),
         appLabel = appLabel.orEmpty(),
+    )
+    ConditionKind.PlaceVisit -> Condition.PlaceVisit(
+        id = id,
+        goal = value.toDouble(),
+        deadlineHour = deadlineHour,
+        placeIds = placeIds,
     )
 }
 

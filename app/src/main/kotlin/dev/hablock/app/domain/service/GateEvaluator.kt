@@ -27,7 +27,12 @@ class GateEvaluator {
         snapshot: MetricSnapshot,
         now: Instant,
         checkpoints: List<StepCheckpoint> = emptyList(),
+        zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
     ): GateState {
+        // A place rule has its own deadline hour, so the step checkpoints do not apply to it.
+        if (block.conditions.any { it is Condition.PlaceVisit }) {
+            return evaluatePlaces(block, dayState, snapshot, now, zone)
+        }
         val threshold = effectiveThreshold(block)
 
         if (block.conditions.isEmpty()) {
@@ -64,6 +69,40 @@ class GateEvaluator {
             next == null -> GateState.Open(progress, threshold)
             else -> GateState.Warn(progress, threshold, next.at, next.steps)
         }
+    }
+
+    /**
+     * Place-shaped blocks: open all day, then binding from each place's own [Condition.PlaceVisit.deadlineHour]
+     * until the required minutes have accumulated. Meeting steps never satisfies a place rule, and vice versa.
+     */
+    private fun evaluatePlaces(
+        block: Block,
+        dayState: BlockDayState?,
+        snapshot: MetricSnapshot,
+        now: Instant,
+        zone: java.time.ZoneId,
+    ): GateState {
+        val threshold = effectiveThreshold(block)
+        val progress = block.conditions.map { condition ->
+            ConditionProgress(
+                condition = condition,
+                current = snapshot.valueOf(condition.id),
+                required = condition.goal,
+            )
+        }
+        sessionIfActive(dayState, now, progress)?.let { return it }
+
+        val localHour = now.atZone(zone).hour
+        val missedPlace = block.conditions
+            .filterIsInstance<Condition.PlaceVisit>()
+            .firstOrNull { localHour >= it.deadlineHour && snapshot.valueOf(it.id) < it.goal }
+        if (missedPlace != null) return GateState.Locked(progress, threshold)
+
+        val others = block.conditions.filterNot { it is Condition.PlaceVisit }
+        val met = others.count { snapshot.valueOf(it.id) >= it.goal }
+        if (others.isNotEmpty() && met < threshold) return GateState.Locked(progress, threshold)
+
+        return GateState.Open(progress, threshold)
     }
 
     fun effectiveThreshold(block: Block): Int =

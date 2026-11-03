@@ -18,6 +18,7 @@ fun Condition.displayLabel(): String = when (this) {
     is Condition.Steps -> stringResource(R.string.condition_steps)
     is Condition.Exercise -> stringResource(R.string.condition_workout)
     is Condition.Meditation -> stringResource(R.string.condition_meditation)
+    is Condition.PlaceVisit -> stringResource(R.string.condition_place)
 }
 
 @Composable

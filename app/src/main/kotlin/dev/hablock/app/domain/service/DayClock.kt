@@ -16,6 +16,9 @@ class DayClock(
     // Resolved per call so a timezone change on the device takes effect without a new instance.
     private val zone: ZoneId get() = zoneOverride ?: ZoneId.systemDefault()
 
+    /** The zone deadlines are expressed in, so callers can judge a local hour without guessing. */
+    val zoneId: ZoneId get() = zone
+
     fun now(): Instant = clock.instant()
 
     fun dayStart(now: Instant = now()): Instant {

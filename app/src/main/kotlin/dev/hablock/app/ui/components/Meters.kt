@@ -51,6 +51,7 @@ fun ConditionAvatar(
         is Condition.Steps -> ConditionPictogram(HablockIcons.Run, PictogramMotion.Stride, met, modifier, size)
         is Condition.Exercise -> ConditionPictogram(HablockIcons.Lift, PictogramMotion.Rep, met, modifier, size)
         is Condition.Meditation -> ConditionPictogram(HablockIcons.Meditate, PictogramMotion.Breathe, met, modifier, size)
+        is Condition.PlaceVisit -> ConditionPictogram(HablockIcons.Place, PictogramMotion.Stride, met, modifier, size)
     }
 }
 

@@ -227,12 +227,44 @@ fun SettingsScreen() {
                     )
                 },
             )
-            if (uiState.locationPlaces.isNotEmpty()) {
-                uiState.locationPlaces.forEachIndexed { index, place ->
+            // One gym is the common case: no radio, no "any place" choice, just the place itself.
+            if (uiState.locationPlaces.size == 1) {
+                val only = uiState.locationPlaces.first()
+                GroupedListItem(
+                    position = GroupPosition.Middle,
+                    title = only.name,
+                    supporting = stringResource(R.string.settings_location_radius, only.radiusMeters.toInt()),
+                    trailing = {
+                        TextButton(onClick = { viewModel.removePlace(only.id) }) {
+                            Text(stringResource(R.string.settings_location_remove))
+                        }
+                    },
+                )
+            } else if (uiState.locationPlaces.size > 1) {
+                GroupedListItem(
+                    position = GroupPosition.Middle,
+                    onClick = { viewModel.setDefaultPlace(null) },
+                    title = stringResource(R.string.settings_location_any_place),
+                    supporting = stringResource(R.string.settings_location_any_place_hint),
+                    leading = {
+                        androidx.compose.material3.RadioButton(
+                            selected = uiState.locationDefaultPlaceId == null,
+                            onClick = { viewModel.setDefaultPlace(null) },
+                        )
+                    },
+                )
+                uiState.locationPlaces.forEach { place ->
                     GroupedListItem(
-                        position = if (index == 0) GroupPosition.Middle else GroupPosition.Middle,
+                        position = GroupPosition.Middle,
+                        onClick = { viewModel.setDefaultPlace(place.id) },
                         title = place.name,
                         supporting = stringResource(R.string.settings_location_radius, place.radiusMeters.toInt()),
+                        leading = {
+                            androidx.compose.material3.RadioButton(
+                                selected = uiState.locationDefaultPlaceId == place.id,
+                                onClick = { viewModel.setDefaultPlace(place.id) },
+                            )
+                        },
                         trailing = {
                             TextButton(onClick = { viewModel.removePlace(place.id) }) {
                                 Text(stringResource(R.string.settings_location_remove))
@@ -242,9 +274,10 @@ fun SettingsScreen() {
                 }
             }
             GroupedListItem(position = GroupPosition.Last) {
-                AddPlaceRow(
+                GymEditorRow(
                     enabled = uiState.fineLocation,
-                    onAdd = { name, radius -> viewModel.addPlaceHere(name, radius) },
+                    onHere = { name, radius -> viewModel.addPlaceHere(name, radius) },
+                    onTyped = { name, lat, lon, radius -> viewModel.addPlace(name, lat, lon, radius) },
                 )
             }
 
@@ -435,26 +468,41 @@ private fun RelinquishControls(
     }
 }
 
-/** "Add this place": captures the current fix with a name and a per-place radius. */
+/**
+ * "Add a gym": either type the coordinates or stand there and use the current fix. Typed entry is the
+ * default because a gym can be set up from home; the here-and-now path stays for one-off visits.
+ */
 @Composable
-private fun AddPlaceRow(enabled: Boolean, onAdd: (String, Double) -> Unit) {
+private fun GymEditorRow(
+    enabled: Boolean,
+    onHere: (String, Double) -> Unit,
+    onTyped: (String, Double, Double, Double) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var radius by remember { mutableStateOf("150") }
+    var lat by remember { mutableStateOf("") }
+    var lon by remember { mutableStateOf("") }
+    val radiusValue = radius.toDoubleOrNull() ?: 150.0
+    val latValue = lat.toDoubleOrNull()
+    val lonValue = lon.toDoubleOrNull()
+    val typedReady = latValue != null && lonValue != null &&
+        latValue in -90.0..90.0 && lonValue in -180.0..180.0
+
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            stringResource(if (enabled) R.string.settings_location_add_hint else R.string.settings_location_need_permission),
+            stringResource(if (enabled) R.string.settings_location_gym_hint else R.string.settings_location_need_permission),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Button(onClick = { open = true }, enabled = enabled) {
-            Text(stringResource(R.string.settings_location_add))
+            Text(stringResource(R.string.settings_location_add_gym))
         }
     }
     if (open) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { open = false },
-            title = { Text(stringResource(R.string.settings_location_add)) },
+            title = { Text(stringResource(R.string.settings_location_add_gym)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     androidx.compose.material3.OutlinedTextField(
@@ -477,18 +525,48 @@ private fun AddPlaceRow(enabled: Boolean, onAdd: (String, Double) -> Unit) {
                             TextButton(onClick = { radius = preset.toString() }) { Text("$preset m") }
                         }
                     }
+                    androidx.compose.material3.OutlinedTextField(
+                        value = lat,
+                        onValueChange = { lat = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
+                        label = { Text(stringResource(R.string.settings_location_latitude)) },
+                        singleLine = true,
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = lon,
+                        onValueChange = { lon = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
+                        label = { Text(stringResource(R.string.settings_location_longitude)) },
+                        singleLine = true,
+                    )
+                    Text(
+                        stringResource(R.string.settings_location_gym_help),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    onAdd(name, radius.toDoubleOrNull() ?: 150.0)
-                    open = false
-                    name = ""
-                }) { Text(stringResource(R.string.settings_location_save)) }
+                TextButton(
+                    onClick = {
+                        onTyped(name, latValue ?: 0.0, lonValue ?: 0.0, radiusValue)
+                        open = false
+                        name = ""
+                        lat = ""
+                        lon = ""
+                    },
+                    enabled = typedReady,
+                ) { Text(stringResource(R.string.settings_location_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { open = false }) { Text(stringResource(android.R.string.cancel)) }
+                Row {
+                    TextButton(onClick = {
+                        onHere(name, radiusValue)
+                        open = false
+                        name = ""
+                    }) { Text(stringResource(R.string.settings_location_use_here)) }
+                    TextButton(onClick = { open = false }) { Text(stringResource(android.R.string.cancel)) }
+                }
             },
         )
     }
 }
+

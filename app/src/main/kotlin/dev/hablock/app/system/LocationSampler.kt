@@ -34,21 +34,24 @@ class LocationSampler(
 
     suspend fun sample() {
         val config = locationStore.config()
-        if (!config.enabled || config.places.isEmpty()) return
+        // Places exist because some block needs them; the global rule's own switch is not the only reason
+        // to sample, or a per-block gym condition would never accumulate minutes.
+        if (config.places.isEmpty()) return
         if (!hasLocationPermission()) return
 
         val location = freshestLocation() ?: return
         val now = Instant.now()
         val dayKey = dayClock.dayKey(now)
         val state = locationStore.day() ?: DwellDayState(dayKey = dayKey)
-        val inside = DwellTracker.insideAny(config.places, location.latitude, location.longitude)
+        val matched = DwellTracker.matchedPlace(config.places, location.latitude, location.longitude)
         locationStore.saveDay(
             DwellTracker.apply(
                 state = state,
                 dayKey = dayKey,
                 now = now,
-                inside = inside,
+                inside = matched != null,
                 maxStepMillis = GateConstants.LOCATION_MAX_CREDIT_MILLIS,
+                placeId = matched?.id,
             ),
         )
     }

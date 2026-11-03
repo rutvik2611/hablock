@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +45,8 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hablock.app.R
 import dev.hablock.app.domain.GateConstants
 import dev.hablock.app.domain.model.InstalledApp
+import dev.hablock.app.domain.model.TrackedPlace
 import dev.hablock.app.ui.components.AppIconCookie
 import dev.hablock.app.ui.components.GroupedListItem
 import dev.hablock.app.ui.components.PlayfulStepper
@@ -76,6 +82,8 @@ fun BlockWizardSheet(blockId: String?, onDismiss: () -> Unit) {
             container.installedAppsRepository,
             container.healthRepository,
             container.gateEngine,
+            container.locationStore,
+            container.locationSampler,
         )
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -289,6 +297,9 @@ private fun ConditionCard(draft: ConditionDraft, uiState: WizardUiState, viewMod
                 if (draft.kind == ConditionKind.AppUsage) {
                     HelperAppPicker(draft, uiState, viewModel)
                 }
+                if (draft.kind == ConditionKind.PlaceVisit) {
+                    PlacePicker(draft, uiState, viewModel)
+                }
             }
         }
     }
@@ -463,6 +474,7 @@ private fun ConditionKind.friendlyName(): String = when (this) {
     ConditionKind.Workout -> stringResource(R.string.condition_workout)
     ConditionKind.Meditation -> stringResource(R.string.condition_meditation)
     ConditionKind.AppUsage -> stringResource(R.string.wizard_condition_app_usage)
+    ConditionKind.PlaceVisit -> stringResource(R.string.wizard_condition_place)
 }
 
 @Composable
@@ -471,10 +483,187 @@ private fun ConditionKind.friendlyHint(): String = when (this) {
     ConditionKind.Workout -> stringResource(R.string.wizard_hint_workout)
     ConditionKind.Meditation -> stringResource(R.string.wizard_hint_meditation)
     ConditionKind.AppUsage -> stringResource(R.string.wizard_hint_app_usage)
+    ConditionKind.PlaceVisit -> stringResource(R.string.wizard_hint_place)
 }
 
 @Composable
 private fun ConditionKind.goalUnit(): String = when (this) {
     ConditionKind.Steps -> stringResource(R.string.wizard_unit_steps)
     else -> stringResource(R.string.wizard_unit_minutes)
+}
+
+/**
+ * The gym selector: one radio per tracked place, plus "Any tracked place" and an inline "add another gym".
+ * Radio rather than checkboxes because one condition binds to one place at a time.
+ */
+@Composable
+private fun PlacePicker(draft: ConditionDraft, uiState: WizardUiState, viewModel: BlockWizardViewModel) {
+    var adding by remember { mutableStateOf(false) }
+    val chosen = draft.placeIds.firstOrNull()
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // With one gym there is nothing to choose, so it is not presented as a choice.
+        when {
+            uiState.places.isEmpty() -> Text(
+                stringResource(R.string.wizard_place_none),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            uiState.places.size == 1 -> {
+                val only = uiState.places.first()
+                PlaceRadioRow(
+                    label = stringResource(R.string.wizard_place_radius, only.name, only.radiusMeters.toInt()),
+                    selected = true,
+                    onClick = { viewModel.selectPlace(draft.id, only.id) },
+                )
+            }
+            else -> {
+                Text(
+                    stringResource(R.string.wizard_place_choose),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PlaceRadioRow(
+                    label = stringResource(R.string.wizard_place_any),
+                    selected = chosen == null,
+                    onClick = { viewModel.selectPlace(draft.id, null) },
+                )
+                uiState.places.forEach { place ->
+                    PlaceRadioRow(
+                        label = stringResource(R.string.wizard_place_radius, place.name, place.radiusMeters.toInt()),
+                        selected = chosen == place.id,
+                        onClick = { viewModel.selectPlace(draft.id, place.id) },
+                    )
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { adding = true }) {
+                Text(stringResource(R.string.wizard_place_add))
+            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                stringResource(R.string.wizard_place_deadline, hourLabel(draft.deadlineHour)),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            IconButton(
+                onClick = { viewModel.setPlaceDeadline(draft.id, draft.deadlineHour - 1) },
+                enabled = draft.deadlineHour > 0,
+            ) { Text("−", style = MaterialTheme.typography.titleMedium) }
+            IconButton(
+                onClick = { viewModel.setPlaceDeadline(draft.id, draft.deadlineHour + 1) },
+                enabled = draft.deadlineHour < 23,
+            ) { Text("+", style = MaterialTheme.typography.titleMedium) }
+        }
+    }
+
+    if (adding) {
+        AddPlaceDialog(
+            onDismiss = { adding = false },
+            onHere = { name, radius ->
+                viewModel.addPlaceHere(name, radius)
+                adding = false
+            },
+            onTyped = { name, lat, lon, radius ->
+                viewModel.addPlace(name, lat, lon, radius)
+                adding = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun PlaceRadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** Adds a gym by typed coordinates (no map, no Play Services) or by the current fix. */
+@Composable
+private fun AddPlaceDialog(
+    onDismiss: () -> Unit,
+    onHere: (String, Double) -> Unit,
+    onTyped: (String, Double, Double, Double) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var radius by remember { mutableStateOf("150") }
+    var lat by remember { mutableStateOf("") }
+    var lon by remember { mutableStateOf("") }
+    val radiusValue = radius.toDoubleOrNull()
+    val latValue = lat.toDoubleOrNull()
+    val lonValue = lon.toDoubleOrNull()
+    val typedReady = radiusValue != null && latValue != null && lonValue != null &&
+        latValue in -90.0..90.0 && lonValue in -180.0..180.0
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.wizard_place_add)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.settings_location_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = radius,
+                    onValueChange = { radius = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text(stringResource(R.string.wizard_place_radius_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = lat,
+                    onValueChange = { lat = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
+                    label = { Text(stringResource(R.string.wizard_place_latitude)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = lon,
+                    onValueChange = { lon = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
+                    label = { Text(stringResource(R.string.wizard_place_longitude)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    stringResource(R.string.wizard_place_add_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onTyped(name, latValue ?: 0.0, lonValue ?: 0.0, radiusValue ?: 150.0) },
+                enabled = typedReady,
+            ) { Text(stringResource(R.string.wizard_place_save)) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { onHere(name, radiusValue ?: 150.0) }) {
+                    Text(stringResource(R.string.wizard_place_use_here))
+                }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            }
+        },
+    )
+}
+
+/** "8:00 PM" for a bare hour, matching the rest of the app's 12-hour clocks. */
+private fun hourLabel(hour: Int): String {
+    val h = ((hour % 24) + 24) % 24
+    val display = when {
+        h % 12 == 0 -> 12
+        else -> h % 12
+    }
+    return "$display:00 ${if (h < 12) "AM" else "PM"}"
 }
