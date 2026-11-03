@@ -27,6 +27,12 @@ object GateConstants {
     /** How often a closed gate re-reads Health Connect to notice that the target was reached. */
     val RECHECK_INTERVAL: Duration = 5.minutes
 
+    /** How often the tracked place sampler reads location while a location requirement is configured. */
+    val LOCATION_SAMPLE_INTERVAL: Duration = 5.minutes
+
+    /** A single sample can credit at most this much, so a sleeping phone cannot fake a workout. */
+    const val LOCATION_MAX_CREDIT_MILLIS: Long = 6 * 60_000L
+
     /** Reminder leads before each checkpoint: "X steps left by 12:00" at each of these. */
     val CHECKPOINT_WARNING_LEADS: List<Duration> = listOf(60.minutes, 30.minutes, 10.minutes)
     val SESSION_DURATION: Duration = 30.minutes
@@ -39,6 +45,7 @@ object GateConstants {
     const val ACTION_DAY_RESET = "dev.hablock.app.action.DAY_RESET"
     const val ACTION_CHECKPOINT_REACHED = "dev.hablock.app.action.CHECKPOINT_REACHED"
     const val ACTION_CHECKPOINT_WARNING = "dev.hablock.app.action.CHECKPOINT_WARNING"
+    const val ACTION_LOCATION_SAMPLE = "dev.hablock.app.action.GYM_SAMPLE"
     const val ACTION_RECHECK = "dev.hablock.app.action.RECHECK"
     const val EXTRA_CHECKPOINT_STEPS = "checkpoint_steps"
     const val ACTION_RELINQUISH_READY = "dev.hablock.app.action.RELINQUISH_READY"

@@ -80,6 +80,9 @@ fun SettingsScreen() {
             container.healthRepository,
             container.overrideStore,
             container.gateEngine,
+            container.locationStore,
+            container.locationSampler,
+            container.dayClock,
         )
     }
     val healthLauncher = rememberLauncherForActivityResult(
@@ -88,6 +91,12 @@ fun SettingsScreen() {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val relinquish by viewModel.relinquish.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val locationLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { viewModel.refresh() }
+    val backgroundLocationLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { viewModel.refresh() }
     var guideOpen by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<RelinquishDialog?>(null) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -173,6 +182,69 @@ fun SettingsScreen() {
                     Modifier.padding(start = 18.dp, top = 8.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            SectionHeader(stringResource(R.string.settings_section_location))
+            GrantItem(
+                position = GroupPosition.First,
+                index = 0,
+                label = stringResource(R.string.settings_location_access),
+                granted = uiState.fineLocation,
+            ) {
+                locationLauncher.launch(
+                    arrayOf(
+                        android.Manifest.permission.ACCESS_FINE_LOCATION,
+                        android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                    ),
+                )
+            }
+            GrantItem(
+                position = GroupPosition.Middle,
+                index = 1,
+                label = stringResource(R.string.settings_location_background),
+                granted = uiState.backgroundLocation,
+            ) {
+                // Android 11+ only offers "Allow all the time" from the app's own settings page.
+                val intent = android.content.Intent(
+                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.fromParts("package", context.packageName, null),
+                )
+                backgroundLocationLauncher.launch(intent)
+            }
+            GroupedListItem(
+                position = GroupPosition.Middle,
+                title = stringResource(R.string.settings_location_require),
+                supporting = stringResource(
+                    R.string.settings_location_summary,
+                    uiState.locationRequiredMinutes,
+                    uiState.locationMinutesToday,
+                ),
+                trailing = {
+                    androidx.compose.material3.Switch(
+                        checked = uiState.locationEnabled,
+                        onCheckedChange = { viewModel.setLocationEnabled(it) },
+                    )
+                },
+            )
+            if (uiState.locationPlaces.isNotEmpty()) {
+                uiState.locationPlaces.forEachIndexed { index, place ->
+                    GroupedListItem(
+                        position = if (index == 0) GroupPosition.Middle else GroupPosition.Middle,
+                        title = place.name,
+                        supporting = stringResource(R.string.settings_location_radius, place.radiusMeters.toInt()),
+                        trailing = {
+                            TextButton(onClick = { viewModel.removePlace(place.id) }) {
+                                Text(stringResource(R.string.settings_location_remove))
+                            }
+                        },
+                    )
+                }
+            }
+            GroupedListItem(position = GroupPosition.Last) {
+                AddPlaceRow(
+                    enabled = uiState.fineLocation,
+                    onAdd = { name, radius -> viewModel.addPlaceHere(name, radius) },
                 )
             }
 
@@ -360,5 +432,63 @@ private fun RelinquishControls(
                 contentColor = MaterialTheme.colorScheme.onError,
             ),
         ) { Text(stringResource(R.string.settings_relinquish_now)) }
+    }
+}
+
+/** "Add this place": captures the current fix with a name and a per-place radius. */
+@Composable
+private fun AddPlaceRow(enabled: Boolean, onAdd: (String, Double) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var radius by remember { mutableStateOf("150") }
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            stringResource(if (enabled) R.string.settings_location_add_hint else R.string.settings_location_need_permission),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(onClick = { open = true }, enabled = enabled) {
+            Text(stringResource(R.string.settings_location_add))
+        }
+    }
+    if (open) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(stringResource(R.string.settings_location_add)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(stringResource(R.string.settings_location_name)) },
+                        singleLine = true,
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = radius,
+                        onValueChange = { radius = it.filter(Char::isDigit) },
+                        label = { Text(stringResource(R.string.settings_location_radius_label)) },
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                        ),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(100, 150, 250, 500).forEach { preset ->
+                            TextButton(onClick = { radius = preset.toString() }) { Text("$preset m") }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onAdd(name, radius.toDoubleOrNull() ?: 150.0)
+                    open = false
+                    name = ""
+                }) { Text(stringResource(R.string.settings_location_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { open = false }) { Text(stringResource(android.R.string.cancel)) }
+            },
+        )
     }
 }

@@ -43,6 +43,7 @@ interface AlarmScheduler {
     fun scheduleDayReset(at: Instant)
     fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean, leadMinutes: Int = 0)
     fun scheduleRecheck(at: Instant)
+    fun scheduleLocationSample(at: Instant)
     fun scheduleRelinquishReady(at: Instant)
     fun cancelRelinquishReady()
 }
@@ -59,6 +60,14 @@ interface Notifier {
 
     /** The target was reached and the apps are usable again. */
     fun gateOpened()
+}
+
+/** Location places, the dwell requirement, and today's accumulated time. */
+interface LocationStore {
+    suspend fun config(): dev.hablock.app.domain.model.LocationRule
+    suspend fun saveConfig(config: dev.hablock.app.domain.model.LocationRule)
+    suspend fun day(): dev.hablock.app.domain.model.DwellDayState?
+    suspend fun saveDay(state: dev.hablock.app.domain.model.DwellDayState)
 }
 
 /** Time-boxed manual unlock, persisted so a restart cannot silently end it early. */

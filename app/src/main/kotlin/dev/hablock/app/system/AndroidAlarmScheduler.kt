@@ -16,6 +16,7 @@ private const val SESSION_REQUEST_CODE = 2
 private const val CHECKPOINT_REQUEST_CODE = 3
 private const val CHECKPOINT_WARNING_REQUEST_CODE = 4
 private const val RECHECK_REQUEST_CODE = 5
+private const val GYM_REQUEST_CODE = 6
 private const val INEXACT_WINDOW_MILLIS = 2 * 60 * 1000L
 
 class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
@@ -55,6 +56,17 @@ class AndroidAlarmScheduler(private val context: Context) : AlarmScheduler {
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             if (warning) CHECKPOINT_WARNING_REQUEST_CODE else CHECKPOINT_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        schedule(pendingIntent, at)
+    }
+
+    override fun scheduleLocationSample(at: Instant) {
+        val intent = Intent(context, AlarmReceiver::class.java).setAction(GateConstants.ACTION_LOCATION_SAMPLE)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            GYM_REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

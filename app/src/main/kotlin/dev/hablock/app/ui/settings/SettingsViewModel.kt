@@ -24,6 +24,12 @@ data class SettingsUiState(
     val healthSupported: Boolean = true,
     val health: Boolean = false,
     val overrideUntil: java.time.Instant? = null,
+    val locationEnabled: Boolean = false,
+    val locationRequiredMinutes: Int = 30,
+    val locationPlaces: List<dev.hablock.app.domain.model.TrackedPlace> = emptyList(),
+    val locationMinutesToday: Long = 0,
+    val fineLocation: Boolean = false,
+    val backgroundLocation: Boolean = false,
 )
 
 class SettingsViewModel(
@@ -33,6 +39,9 @@ class SettingsViewModel(
     private val healthRepository: HealthRepository,
     private val overrideStore: dev.hablock.app.domain.service.OverrideStore,
     private val gateEngine: dev.hablock.app.domain.service.GateEngine,
+    private val locationStore: dev.hablock.app.domain.service.LocationStore,
+    private val locationSampler: dev.hablock.app.system.LocationSampler,
+    private val dayClock: dev.hablock.app.domain.service.DayClock,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -46,6 +55,8 @@ class SettingsViewModel(
     fun refresh() {
         _uiState.value = _uiState.value.copy(
             accessibility = permissionChecker.isAccessibilityServiceEnabled(),
+            fineLocation = permissionChecker.hasFineLocation(),
+            backgroundLocation = permissionChecker.hasBackgroundLocation(),
             usageAccess = permissionChecker.hasUsageAccess(),
             exactAlarms = permissionChecker.canScheduleExactAlarms(),
             deviceOwner = deviceOwnerController.isDeviceOwner(),
@@ -54,6 +65,15 @@ class SettingsViewModel(
             val until = runCatching { overrideStore.until() }.getOrNull()
             val active = until?.takeIf { it.isAfter(java.time.Instant.now()) }
             _uiState.value = _uiState.value.copy(overrideUntil = active)
+            val rule = runCatching { locationStore.config() }.getOrDefault(dev.hablock.app.domain.model.LocationRule())
+            val day = runCatching { locationStore.day() }.getOrNull()
+                ?.takeIf { it.dayKey == dayClock.dayKey() }
+            _uiState.value = _uiState.value.copy(
+                locationEnabled = rule.enabled,
+                locationRequiredMinutes = rule.requiredMinutes,
+                locationPlaces = rule.places,
+                locationMinutesToday = (day?.accumulatedMillis ?: 0L) / 60_000L,
+            )
             val availability = runCatching { healthRepository.availability() }.getOrDefault(HcAvailability.UNAVAILABLE)
             val granted = runCatching { healthRepository.hasAllPermissions() }.getOrDefault(false)
             _uiState.value = _uiState.value.copy(
@@ -61,6 +81,43 @@ class SettingsViewModel(
                 health = granted,
             )
         }
+    }
+
+    fun setLocationEnabled(enabled: Boolean) = viewModelScope.launch {
+        val rule = locationStore.config()
+        locationStore.saveConfig(rule.copy(enabled = enabled))
+        gateEngine.refreshAll()
+        refresh()
+    }
+
+    fun setLocationRequiredMinutes(minutes: Int) = viewModelScope.launch {
+        val rule = locationStore.config()
+        locationStore.saveConfig(rule.copy(requiredMinutes = minutes.coerceIn(5, 240)))
+        gateEngine.refreshAll()
+        refresh()
+    }
+
+    /** Saves the phone's current position as a tracked place with the radius the user chose. */
+    fun addPlaceHere(name: String, radiusMeters: Double) = viewModelScope.launch {
+        val fix = runCatching { locationSampler.currentLocation() }.getOrNull() ?: return@launch
+        val rule = locationStore.config()
+        val place = dev.hablock.app.domain.model.TrackedPlace(
+            id = java.util.UUID.randomUUID().toString(),
+            name = name.ifBlank { "Place ${rule.places.size + 1}" },
+            latitude = fix.latitude,
+            longitude = fix.longitude,
+            radiusMeters = radiusMeters.coerceIn(50.0, 2000.0),
+        )
+        locationStore.saveConfig(rule.copy(enabled = true, places = rule.places + place))
+        gateEngine.refreshAll()
+        refresh()
+    }
+
+    fun removePlace(id: String) = viewModelScope.launch {
+        val rule = locationStore.config()
+        locationStore.saveConfig(rule.copy(places = rule.places.filterNot { it.id == id }))
+        gateEngine.refreshAll()
+        refresh()
     }
 
     /** End a temporary unlock now instead of waiting for it to run out. */

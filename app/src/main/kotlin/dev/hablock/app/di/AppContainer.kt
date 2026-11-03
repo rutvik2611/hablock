@@ -10,6 +10,7 @@ import dev.hablock.app.data.AndroidPermissionChecker
 import dev.hablock.app.data.AndroidUsageStatsRepository
 import dev.hablock.app.data.DataStoreBlockRepository
 import dev.hablock.app.data.DataStoreGateStateRepository
+import dev.hablock.app.data.DataStoreLocationStore
 import dev.hablock.app.data.DataStoreOverrideStore
 import dev.hablock.app.data.DataStoreSettingsRepository
 import dev.hablock.app.data.DataStoreSuspensionStore
@@ -35,6 +36,7 @@ import dev.hablock.app.domain.service.DefaultRelinquishTimer
 import dev.hablock.app.domain.service.GateEngine
 import dev.hablock.app.domain.service.MetricProvider
 import dev.hablock.app.domain.service.Notifier
+import dev.hablock.app.domain.service.LocationStore
 import dev.hablock.app.domain.service.OverrideStore
 import dev.hablock.app.domain.service.RelinquishTimer
 import dev.hablock.app.enforcement.AccessibilityEnforcementBackend
@@ -73,6 +75,10 @@ class AppContainer(context: Context) {
     val deviceOwnerController: DeviceOwnerController by lazy { DevicePolicyController(appContext) }
     private val suspensionStore: SuspensionStore by lazy { DataStoreSuspensionStore(dataStore) }
     val overrideStore: OverrideStore by lazy { DataStoreOverrideStore(dataStore) }
+    val locationStore: LocationStore by lazy { DataStoreLocationStore(dataStore, json) }
+    val locationSampler: dev.hablock.app.system.LocationSampler by lazy {
+        dev.hablock.app.system.LocationSampler(appContext, locationStore, dayClock)
+    }
 
     val alarmScheduler: AlarmScheduler by lazy { AndroidAlarmScheduler(appContext) }
     val notifier: Notifier by lazy {
@@ -110,6 +116,7 @@ class AppContainer(context: Context) {
             alarmScheduler = alarmScheduler,
             notifier = notifier,
             overrideStore = overrideStore,
+            locationStore = locationStore,
             enforcement = enforcement,
             sessionDuration = sessionDuration,
             scope = applicationScope,

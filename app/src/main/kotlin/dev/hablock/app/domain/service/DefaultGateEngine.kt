@@ -7,6 +7,8 @@ import dev.hablock.app.domain.model.BlockDayState
 import dev.hablock.app.domain.model.Condition
 import dev.hablock.app.domain.model.ForegroundState
 import dev.hablock.app.domain.model.GateState
+import dev.hablock.app.domain.model.DwellDayState
+import dev.hablock.app.domain.model.DwellTracker
 import dev.hablock.app.domain.model.MetricSnapshot
 import dev.hablock.app.domain.model.StepCheckpoint
 import dev.hablock.app.domain.repository.BlockRepository
@@ -40,6 +42,7 @@ class DefaultGateEngine(
     private val alarmScheduler: AlarmScheduler,
     private val notifier: Notifier,
     private val overrideStore: OverrideStore,
+    private val locationStore: LocationStore,
     private val enforcement: EnforcementBackend,
     private val sessionDuration: Duration,
     scope: CoroutineScope,
@@ -61,6 +64,24 @@ class DefaultGateEngine(
         scope.launch {
             blockRepository.blocks.collect { knownBlocks = it }
         }
+    }
+
+    /**
+     * True when the location rule is configured, its deadline has passed and today's dwell is still short.
+     * The location gate sits on top of the step checkpoints: meeting steps does not excuse a missed location.
+     */
+    private suspend fun dwellIsShort(now: Instant): Boolean {
+        val config = locationStore.config()
+        if (!config.enabled || config.places.isEmpty()) return false
+        if (now.isBefore(dayClock.todayAt(now, config.deadlineHour))) return false
+        val day = locationStore.day() ?: DwellDayState(dayClock.dayKey(now))
+        return !DwellTracker.isSatisfied(day, config)
+    }
+
+    /** While a location requirement exists, sample location on a timer so dwell time accumulates. */
+    private suspend fun armLocationSampling(now: Instant) {
+        if (!locationStore.config().enabled) return
+        alarmScheduler.scheduleLocationSample(now.plusMillis(GateConstants.LOCATION_SAMPLE_INTERVAL.inWholeMilliseconds))
     }
 
     /** The active manual unlock, clearing a stale one; null when the gate is authoritative. */
@@ -241,13 +262,19 @@ class DefaultGateEngine(
         val checkpoints = checkpointList(now)
         val override = activeOverride(now)
         val previous = _states.value
+        val locationShort = dwellIsShort(now)
+        armLocationSampling(now)
         val autoStart = override == null && !checkpointMode && !enforcement.reportsForegroundUse()
         val next = mutableMapOf<String, GateState>()
         for (block in blocks.filter { it.enabled }) {
             val dayState = expireSession(resolveDayState(block, dayKey), now)
             val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics)
             val judged = evaluator.evaluate(block, dayState, snapshot, now, checkpoints)
-            var state = if (override != null) GateState.Override(judged.progress, override) else judged
+            var state = when {
+                override != null -> GateState.Override(judged.progress, override)
+                locationShort -> GateState.Locked(judged.progress, evaluator.effectiveThreshold(block))
+                else -> judged
+            }
             if (autoStart && state is GateState.Open && justUnlocked(previous[block.id], dayState)) {
                 startSession(Evaluated(block, dayState, snapshot, state), now)?.let {
                     state = evaluator.evaluate(block, it, snapshot, now, checkpoints)

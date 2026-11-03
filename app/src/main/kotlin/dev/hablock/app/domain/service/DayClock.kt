@@ -32,6 +32,10 @@ class DayClock(
     fun nextReset(now: Instant = now()): Instant =
         resetAt(dayStart(now).atZone(zone).toLocalDate().plusDays(1))
 
+    /** Today at [hour]:00 local; used by clock-based rules such as the location deadline. */
+    fun todayAt(now: Instant = now(), hour: Int): Instant =
+        ZonedDateTime.of(dayStart(now).atZone(zone).toLocalDate(), java.time.LocalTime.of(hour, 0), zone).toInstant()
+
     /** Today's checkpoints in local time, earliest first. */
     fun checkpoints(now: Instant = now()): List<StepCheckpoint> {
         val date = dayStart(now).atZone(zone).toLocalDate()

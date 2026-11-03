@@ -54,4 +54,6 @@ interface PermissionChecker {
     fun hasUsageAccess(): Boolean
     fun hasNotificationPermission(): Boolean
     fun canScheduleExactAlarms(): Boolean
+    fun hasFineLocation(): Boolean
+    fun hasBackgroundLocation(): Boolean
 }

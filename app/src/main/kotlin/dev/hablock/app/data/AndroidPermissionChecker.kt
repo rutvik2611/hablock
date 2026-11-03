@@ -51,6 +51,12 @@ class AndroidPermissionChecker(context: Context) : PermissionChecker {
             true
         }
 
+    override fun hasFineLocation(): Boolean =
+        isGranted(Manifest.permission.ACCESS_FINE_LOCATION) || isGranted(Manifest.permission.ACCESS_COARSE_LOCATION)
+
+    override fun hasBackgroundLocation(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || isGranted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+
     @Suppress("DEPRECATION")
     private fun usageStatsOpMode(appOps: AppOpsManager): Int {
         val uid = Process.myUid()

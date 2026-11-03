@@ -9,6 +9,7 @@ import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertIsNot
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -37,6 +38,7 @@ class DefaultGateEngineTest {
     private val alarmScheduler = FakeAlarmScheduler()
     private val notifier = FakeNotifier()
     private val overrideStore = FakeOverrideStore()
+    private val locationStore = FakeLocationStore()
     private val enforcement = FakeEnforcement()
 
     private fun newEngine(scope: CoroutineScope, checkpointMode: Boolean = false) = DefaultGateEngine(
@@ -47,6 +49,7 @@ class DefaultGateEngineTest {
         alarmScheduler = alarmScheduler,
         notifier = notifier,
         overrideStore = overrideStore,
+        locationStore = locationStore,
         enforcement = enforcement,
         sessionDuration = 30.minutes,
         scope = scope,
@@ -477,5 +480,57 @@ class DefaultGateEngineTest {
 
         assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
         assertNull(overrideStore.until())
+    }
+
+    // --- location rule -------------------------------------------------------
+
+    private fun enableLocationRule(satisfied: Boolean) {
+        val place = dev.hablock.app.domain.model.TrackedPlace("p1", "Place", 40.0, -73.0, 150.0)
+        locationStore.config = dev.hablock.app.domain.model.LocationRule(
+            enabled = true,
+            requiredMinutes = 30,
+            deadlineHour = 20,
+            places = listOf(place),
+        )
+        locationStore.day = dev.hablock.app.domain.model.DwellDayState(
+            dayKey = dayKeyFor(clock.current),
+            accumulatedMillis = if (satisfied) 31 * 60_000L else 10 * 60_000L,
+        )
+    }
+
+    private fun dayKeyFor(instant: Instant): String =
+        DayClock(clock, zone).dayKey(instant)
+
+    @Test
+    fun `a missed place visit locks the gate after the deadline even when steps are met`() = runTest {
+        metricProvider.values = mapOf("steps" to 10_000.0, "workout" to 60.0)
+        enableLocationRule(satisfied = false)
+        clock.current = Instant.parse("2026-08-23T18:05:00Z") // 20:05 Berlin, past the 8 PM deadline
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        engine.refreshAll()
+
+        assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+    }
+
+    @Test
+    fun `enough time at the place keeps the gate open`() = runTest {
+        metricProvider.values = mapOf("steps" to 10_000.0, "workout" to 60.0)
+        enableLocationRule(satisfied = true)
+        clock.current = Instant.parse("2026-08-23T18:05:00Z")
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        engine.refreshAll()
+
+        assertIsNot<GateState.Locked>(engine.states.value.getValue("b1"))
+    }
+
+    @Test
+    fun `before the deadline the place rule does not lock anything`() = runTest {
+        metricProvider.values = mapOf("steps" to 10_000.0, "workout" to 60.0)
+        enableLocationRule(satisfied = false)
+        clock.current = Instant.parse("2026-08-23T15:00:00Z") // 17:00 Berlin
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        engine.refreshAll()
+
+        assertIsNot<GateState.Locked>(engine.states.value.getValue("b1"))
     }
 }

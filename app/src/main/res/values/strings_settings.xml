@@ -46,4 +46,17 @@
     <string name="settings_override_active">Temporarily unlocked until %1$s</string>
     <string name="settings_override_body">Apps are open. Lock them again now, or let the timer run out.</string>
     <string name="settings_lock_now">Lock now</string>
+    <string name="settings_section_location">Location rule</string>
+    <string name="settings_location_access">Location access</string>
+    <string name="settings_location_background">Background location</string>
+    <string name="settings_location_require">Require a place visit</string>
+    <string name="settings_location_summary">%1$d min by 8:00 PM · %2$d min today</string>
+    <string name="settings_location_radius">%1$d m radius</string>
+    <string name="settings_location_remove">Remove</string>
+    <string name="settings_location_add">Add this place</string>
+    <string name="settings_location_add_hint">Stand at the place, then add it with the radius you want.</string>
+    <string name="settings_location_need_permission">Grant location access first.</string>
+    <string name="settings_location_name">Name</string>
+    <string name="settings_location_radius_label">Radius (metres)</string>
+    <string name="settings_location_save">Save</string>
 </resources>

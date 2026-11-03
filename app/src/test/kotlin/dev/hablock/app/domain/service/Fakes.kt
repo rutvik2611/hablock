@@ -122,8 +122,14 @@ class FakeAlarmScheduler : AlarmScheduler {
         checkpoints += Triple(at, steps, warning)
     }
 
+    val locationSamples = mutableListOf<Instant>()
+
     override fun scheduleRecheck(at: Instant) {
         rechecks += at
+    }
+
+    override fun scheduleLocationSample(at: Instant) {
+        locationSamples += at
     }
 
     override fun scheduleRelinquishReady(at: Instant) {
@@ -183,6 +189,20 @@ class FakeOverrideStore : OverrideStore {
     }
 
     override suspend fun history(): List<String> = recorded.map { "${it.first.toEpochMilli()}:${it.second}" }
+}
+
+class FakeLocationStore(var config: dev.hablock.app.domain.model.LocationRule = dev.hablock.app.domain.model.LocationRule()) : LocationStore {
+    var day: dev.hablock.app.domain.model.DwellDayState? = null
+
+    override suspend fun config() = config
+    override suspend fun saveConfig(config: dev.hablock.app.domain.model.LocationRule) {
+        this.config = config
+    }
+
+    override suspend fun day() = day
+    override suspend fun saveDay(state: dev.hablock.app.domain.model.DwellDayState) {
+        day = state
+    }
 }
 
 class FakeEnforcement(var foregroundUseReported: Boolean = true) : EnforcementBackend {

@@ -24,6 +24,10 @@ class AlarmReceiver : BroadcastReceiver() {
                     GateConstants.ACTION_CHECKPOINT_REACHED -> container.gateEngine.onCheckpointReached()
                     GateConstants.ACTION_CHECKPOINT_WARNING -> container.gateEngine.onCheckpointWarning()
                     GateConstants.ACTION_RECHECK -> container.gateEngine.onRecheck()
+                    GateConstants.ACTION_LOCATION_SAMPLE -> {
+                        container.locationSampler.sample()
+                        container.gateEngine.refreshAll()
+                    }
                     GateConstants.ACTION_RELINQUISH_READY -> container.notifier.relinquishReady()
                 }
             } finally {
