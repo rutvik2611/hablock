@@ -141,6 +141,12 @@ class SettingsViewModel(
      * Validated against the current fix, so tapping it from the sofa does not open the gate: the check-in
      * is refused unless the phone is inside that place, and the refusal says how far away it is.
      */
+    /** One-tap "use where I am now", so a place can be created standing in it. */
+    fun currentFix(onFix: (Double, Double) -> Unit) = viewModelScope.launch {
+        val fix = runCatching { locationSampler.currentLocation() }.getOrNull() ?: return@launch
+        onFix(fix.latitude, fix.longitude)
+    }
+
     fun checkIn(placeId: String) = viewModelScope.launch {
         val place = locationStore.config().places.firstOrNull { it.id == placeId }
             ?: return@launch
@@ -201,6 +207,9 @@ class SettingsViewModel(
         longitude: Double,
         radiusMeters: Double,
         excluded: Boolean = false,
+        kind: String = "custom",
+        requiredMinutes: Int = 30,
+        deadlineHour: Int = 20,
     ) =
         viewModelScope.launch {
             val rule = locationStore.config()
@@ -211,6 +220,9 @@ class SettingsViewModel(
                 longitude = longitude,
                 radiusMeters = radiusMeters.coerceIn(5.0, 2000.0),
                 excluded = excluded,
+                kind = kind,
+                requiredMinutes = requiredMinutes.coerceIn(5, 240),
+                deadlineHour = deadlineHour.coerceIn(0, 23),
             )
             locationStore.saveConfig(
                 rule.copy(

@@ -16,6 +16,11 @@ data class TrackedPlace(
      * building as home cannot be told apart by radius, so sitting at home would otherwise count as a visit.
      */
     val excluded: Boolean = false,
+    /** gym / home / work / custom — the type picks the default behaviour. */
+    val kind: String = "custom",
+    /** Minutes required at this place, and the local hour they are required by. */
+    val requiredMinutes: Int = 30,
+    val deadlineHour: Int = 20,
 )
 
 /**

@@ -59,7 +59,9 @@ fun PlacesScreen(modifier: Modifier = Modifier) {
         )
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var preset by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    // type -> (label, home?, minutes, deadline hour): the type decides the default behaviour
+    data class Preset(val label: String, val home: Boolean, val minutes: Int, val hour: Int)
+    var preset by remember { mutableStateOf<Preset?>(null) }
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
@@ -166,13 +168,15 @@ fun PlacesScreen(modifier: Modifier = Modifier) {
                 // offered too: it is a label that exists to be excluded, not a requirement.
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
-                        "Gym" to false,
-                        "Home" to true,
-                        "Work" to false,
-                    ).forEach { (label, isHome) ->
-                        TextButton(onClick = { preset = label to isHome }) { Text(label) }
+                        Preset("Gym", home = false, minutes = 30, hour = 20),
+                        Preset("Home", home = true, minutes = 30, hour = 20),
+                        Preset("Work", home = false, minutes = 60, hour = 18),
+                    ).forEach { option ->
+                        TextButton(onClick = { preset = option }) { Text(option.label) }
                     }
-                    TextButton(onClick = { preset = "" to false }) { Text(stringResource(R.string.places_custom)) }
+                    TextButton(onClick = { preset = Preset("", false, 30, 20) }) {
+                        Text(stringResource(R.string.places_custom))
+                    }
                 }
             }
         }
@@ -180,13 +184,24 @@ fun PlacesScreen(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(150.dp))
     }
 
-    preset?.let { (label, isHome) ->
+    preset?.let { option ->
         AddPlaceDialog(
-            initialName = label,
-            initialHome = isHome,
+            preset = option.label,
+            initialMinutes = option.minutes,
+            initialHour = option.hour,
             onDismiss = { preset = null },
-            onSave = { name, lat, lon, radius, home ->
-                viewModel.addPlace(name, lat, lon, radius, excluded = home)
+            onUseCurrent = { fill -> viewModel.currentFix { lat, lon -> fill(lat, lon) } },
+            onSave = { name, lat, lon, radius, home, minutes, hour ->
+                viewModel.addPlace(
+                    name = name,
+                    latitude = lat,
+                    longitude = lon,
+                    radiusMeters = radius,
+                    excluded = home,
+                    kind = option.label.ifBlank { "custom" }.lowercase(),
+                    requiredMinutes = minutes,
+                    deadlineHour = hour,
+                )
                 preset = null
             },
         )
@@ -195,16 +210,20 @@ fun PlacesScreen(modifier: Modifier = Modifier) {
 
 @Composable
 private fun AddPlaceDialog(
-    initialName: String,
-    initialHome: Boolean,
+    preset: String,
+    initialMinutes: Int,
+    initialHour: Int,
     onDismiss: () -> Unit,
-    onSave: (String, Double, Double, Double, Boolean) -> Unit,
+    onUseCurrent: (fill: (Double, Double) -> Unit) -> Unit,
+    onSave: (String, Double, Double, Double, Boolean, Int, Int) -> Unit,
 ) {
-    var name by remember { mutableStateOf(initialName) }
+    var name by remember { mutableStateOf(preset) }
     var radius by remember { mutableStateOf("150") }
     var lat by remember { mutableStateOf("") }
     var lon by remember { mutableStateOf("") }
-    var home by remember { mutableStateOf(initialHome) }
+    var home by remember { mutableStateOf(preset.equals("Home", ignoreCase = true)) }
+    var minutes by remember { mutableStateOf(initialMinutes.toString()) }
+    var hour by remember { mutableStateOf(initialHour.toString()) }
     val latValue = lat.toDoubleOrNull()
     val lonValue = lon.toDoubleOrNull()
     val ready = latValue != null && lonValue != null &&
@@ -212,9 +231,12 @@ private fun AddPlaceDialog(
 
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_location_add_gym)) },
+        title = { Text(stringResource(R.string.places_editor_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -222,19 +244,16 @@ private fun AddPlaceDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
-                    value = radius,
-                    onValueChange = { radius = it.filter(Char::isDigit) },
-                    label = { Text(stringResource(R.string.settings_location_radius_label)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    listOf(5, 25, 100, 250, 500).forEach { preset ->
-                        TextButton(onClick = { radius = preset.toString() }) { Text("$preset m") }
-                    }
-                }
+                // Two ways to place a pin; both are first class.
+                TextButton(
+                    onClick = {
+                        onUseCurrent { fixLat, fixLon ->
+                            lat = "%.6f".format(fixLat)
+                            lon = "%.6f".format(fixLon)
+                        }
+                    },
+                ) { Text(stringResource(R.string.places_use_current)) }
+
                 OutlinedTextField(
                     value = lat,
                     onValueChange = { lat = it.filter { c -> c.isDigit() || c == '.' || c == '-' } },
@@ -249,6 +268,37 @@ private fun AddPlaceDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                OutlinedTextField(
+                    value = radius,
+                    onValueChange = { radius = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.settings_location_radius_label)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    listOf(5, 25, 100, 250, 500).forEach { option ->
+                        TextButton(onClick = { radius = option.toString() }) { Text("$option m") }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = minutes,
+                        onValueChange = { minutes = it.filter(Char::isDigit) },
+                        label = { Text(stringResource(R.string.places_minutes)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = hour,
+                        onValueChange = { hour = it.filter(Char::isDigit) },
+                        label = { Text(stringResource(R.string.places_by_hour)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 Row(
                     Modifier.fillMaxWidth().clickable { home = !home },
                     verticalAlignment = Alignment.CenterVertically,
@@ -260,7 +310,17 @@ private fun AddPlaceDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name, latValue ?: 0.0, lonValue ?: 0.0, radius.toDoubleOrNull() ?: 150.0, home) },
+                onClick = {
+                    onSave(
+                        name,
+                        latValue ?: 0.0,
+                        lonValue ?: 0.0,
+                        radius.toDoubleOrNull() ?: 150.0,
+                        home,
+                        minutes.toIntOrNull() ?: 30,
+                        hour.toIntOrNull() ?: 20,
+                    )
+                },
                 enabled = ready,
             ) { Text(stringResource(R.string.settings_location_save)) }
         },

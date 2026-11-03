@@ -20,6 +20,11 @@
     <string name="places_empty">No places yet</string>
     <string name="places_empty_hint">Add the gym you actually go to.</string>
     <string name="places_custom">Custom</string>
+    <string name="places_editor_title">Add a place</string>
+    <string name="places_use_current">Use my current location</string>
+    <string name="places_minutes">Minutes</string>
+    <string name="places_by_hour">By hour (0-23)</string>
+    <string name="places_unused_custom">Custom</string>
     <string name="places_add_hint">Type the coordinates once; from then on it is one tap.</string>
     <string name="nav_time">Time</string>
     <string name="nav_settings">Settings</string>
