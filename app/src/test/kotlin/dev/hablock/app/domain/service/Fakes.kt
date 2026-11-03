@@ -165,6 +165,26 @@ class FakeNotifier : Notifier {
     }
 }
 
+class FakeOverrideStore : OverrideStore {
+    private var until: Instant? = null
+    val recorded = mutableListOf<Pair<Instant, Int>>()
+
+    override suspend fun until(): Instant? = until
+    override suspend fun set(until: Instant) {
+        this.until = until
+    }
+
+    override suspend fun clear() {
+        until = null
+    }
+
+    override suspend fun record(at: Instant, minutes: Int) {
+        recorded += at to minutes
+    }
+
+    override suspend fun history(): List<String> = recorded.map { "${it.first.toEpochMilli()}:${it.second}" }
+}
+
 class FakeEnforcement(var foregroundUseReported: Boolean = true) : EnforcementBackend {
     val applied = mutableListOf<Map<String, GateState>>()
     val blocked = mutableListOf<Pair<String, String>>()

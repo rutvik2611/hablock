@@ -24,6 +24,9 @@ interface GateEngine {
 
     /** Polled while the gate is closed so reaching the target reopens it without user action. */
     suspend fun onRecheck()
+
+    /** Opens every block for [minutes] and records who-did-what when it expires. */
+    suspend fun grantOverride(minutes: Int)
     suspend fun deleteBlock(blockId: String)
 }
 
@@ -53,6 +56,17 @@ interface Notifier {
 
     /** The target was reached and the apps are usable again. */
     fun gateOpened()
+}
+
+/** Time-boxed manual unlock, persisted so a restart cannot silently end it early. */
+interface OverrideStore {
+    suspend fun until(): Instant?
+    suspend fun set(until: Instant)
+    suspend fun clear()
+
+    /** "epochMillis:minutes" per grant, newest first, capped so the log cannot grow without bound. */
+    suspend fun record(at: Instant, minutes: Int)
+    suspend fun history(): List<String>
 }
 
 interface RelinquishTimer {

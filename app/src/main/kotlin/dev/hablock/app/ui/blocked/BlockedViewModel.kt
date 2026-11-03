@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dev.hablock.app.domain.model.Block
 import dev.hablock.app.domain.model.ConditionProgress
 import dev.hablock.app.domain.model.GateState
+import dev.hablock.app.domain.model.OverrideCode
 import dev.hablock.app.domain.model.HcAvailability
 import dev.hablock.app.domain.model.usesHealthConnect
 import dev.hablock.app.domain.repository.BlockRepository
@@ -56,6 +57,14 @@ class BlockedViewModel(
                 gateEngine.refreshAll()
             }
         }
+    }
+
+    /** True when the typed code is the household override password. Verification stays in domain. */
+    fun codeAccepted(input: String): Boolean = OverrideCode.matches(input)
+
+    fun grantOverride(minutes: Int): Job = viewModelScope.launch {
+        gateEngine.grantOverride(minutes)
+        updateHcProblem()
     }
 
     fun refreshHcStatus() {

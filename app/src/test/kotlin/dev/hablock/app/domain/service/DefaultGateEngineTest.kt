@@ -36,6 +36,7 @@ class DefaultGateEngineTest {
     private val metricProvider = FakeMetricProvider()
     private val alarmScheduler = FakeAlarmScheduler()
     private val notifier = FakeNotifier()
+    private val overrideStore = FakeOverrideStore()
     private val enforcement = FakeEnforcement()
 
     private fun newEngine(scope: CoroutineScope, checkpointMode: Boolean = false) = DefaultGateEngine(
@@ -45,6 +46,7 @@ class DefaultGateEngineTest {
         dayClock = dayClock,
         alarmScheduler = alarmScheduler,
         notifier = notifier,
+        overrideStore = overrideStore,
         enforcement = enforcement,
         sessionDuration = 30.minutes,
         scope = scope,
@@ -427,5 +429,39 @@ class DefaultGateEngineTest {
         assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
         assertTrue(alarmScheduler.checkpoints.isEmpty())
         assertTrue(alarmScheduler.rechecks.isEmpty())
+    }
+
+    // --- manual override -----------------------------------------------------
+
+    @Test
+    fun `override opens a locked gate for the chosen minutes and expires by itself`() = runTest {
+        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        clock.current = Instant.parse("2026-08-23T10:05:00Z") // 12:05 Berlin, short of noon
+        engine.refreshAll()
+        assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+
+        engine.grantOverride(2)
+        val granted = engine.states.value.getValue("b1")
+        assertIs<GateState.Override>(granted)
+        assertEquals(clock.current.plusSeconds(120), granted.until)
+        assertEquals(listOf(clock.current to 2), overrideStore.recorded)
+
+        clock.advance(3 * 60 * 1000)
+        engine.refreshAll()
+        assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+    }
+
+    @Test
+    fun `an override lets a blocked app open without the block screen`() = runTest {
+        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        clock.current = Instant.parse("2026-08-23T10:05:00Z")
+        engine.grantOverride(1)
+
+        engine.onAppForegrounded(SOCIAL)
+
+        assertTrue(enforcement.blocked.isEmpty())
+        assertIs<GateState.Override>(engine.states.value.getValue("b1"))
     }
 }

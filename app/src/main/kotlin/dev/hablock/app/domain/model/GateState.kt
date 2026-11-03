@@ -35,6 +35,15 @@ sealed interface GateState {
         val nextSteps: Double,
     ) : GateState
 
+    /**
+     * A time-boxed unlock bought with the override password. Enforcement is off until [until];
+     * the gate re-locks by itself when the window closes if the checkpoint is still short.
+     */
+    data class Override(
+        override val progress: List<ConditionProgress>,
+        val until: Instant,
+    ) : GateState
+
     data class SessionActive(
         override val progress: List<ConditionProgress>,
         val endsAt: Instant,

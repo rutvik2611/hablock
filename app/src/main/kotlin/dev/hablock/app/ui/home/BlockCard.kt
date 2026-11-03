@@ -69,6 +69,7 @@ fun BlockCard(
     val session = state as? GateState.SessionActive
     val open = state is GateState.Open
     val warn = state as? GateState.Warn
+    val override = state as? GateState.Override
     val met = state?.metCount ?: 0
     val threshold = block.thresholdN.coerceIn(1, block.conditions.size.coerceAtLeast(1))
 
@@ -77,6 +78,7 @@ fun BlockCard(
             paused -> MaterialTheme.colorScheme.surfaceContainerLowest
             session != null -> MaterialTheme.colorScheme.tertiaryContainer
             open -> MaterialTheme.colorScheme.primaryContainer
+            override != null -> MaterialTheme.colorScheme.primaryContainer
             warn != null -> MaterialTheme.colorScheme.surfaceContainerHigh
             else -> MaterialTheme.colorScheme.surfaceContainerLow
         },
@@ -164,6 +166,7 @@ private fun statusLine(paused: Boolean, state: GateState?, met: Int, threshold: 
     paused -> stringResource(R.string.home_card_status_paused)
     state is GateState.SessionActive -> stringResource(R.string.home_card_status_open_until, formatClock(state.endsAt))
     state is GateState.Open -> stringResource(R.string.home_card_status_open)
+    state is GateState.Override -> stringResource(R.string.home_card_status_open_until, formatClock(state.until))
     state is GateState.Warn -> stringResource(
         R.string.home_card_status_warn,
         groupedInt((state.nextSteps - stepsNow(state.progress)).coerceAtLeast(0.0)),

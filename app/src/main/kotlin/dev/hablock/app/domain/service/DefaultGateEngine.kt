@@ -39,6 +39,7 @@ class DefaultGateEngine(
     private val dayClock: DayClock,
     private val alarmScheduler: AlarmScheduler,
     private val notifier: Notifier,
+    private val overrideStore: OverrideStore,
     private val enforcement: EnforcementBackend,
     private val sessionDuration: Duration,
     scope: CoroutineScope,
@@ -60,6 +61,16 @@ class DefaultGateEngine(
         scope.launch {
             blockRepository.blocks.collect { knownBlocks = it }
         }
+    }
+
+    /** The active manual unlock, clearing a stale one; null when the gate is authoritative. */
+    private suspend fun activeOverride(now: Instant): Instant? {
+        val until = overrideStore.until() ?: return null
+        if (!now.isBefore(until)) {
+            overrideStore.clear()
+            return null
+        }
+        return until
     }
 
     /** Empty in classic mode, so the evaluator locks immediately on an unmet goal. */
@@ -101,10 +112,13 @@ class DefaultGateEngine(
             val dayKey = dayClock.dayKey(now)
             val (from, to) = dayClock.dayWindow(now)
             val checkpoints = checkpointList(now)
+            val override = activeOverride(now)
             val evaluated = affected.map { block ->
                 val dayState = expireSession(resolveDayState(block, dayKey), now)
                 val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics = false)
-                Evaluated(block, dayState, snapshot, evaluator.evaluate(block, dayState, snapshot, now, checkpoints))
+                val judged = evaluator.evaluate(block, dayState, snapshot, now, checkpoints)
+                val state = if (override != null) GateState.Override(judged.progress, override) else judged
+                Evaluated(block, dayState, snapshot, state)
             }
             val locked = evaluated.firstOrNull { it.gateState is GateState.Locked }
             if (locked != null) {
@@ -158,7 +172,6 @@ class DefaultGateEngine(
             val blocks = loadBlocks()
             refresh(blocks, refreshMetrics = true)
             coverForeground(blocks)
-            scheduleRecheckIfLocked(blocks)
         }
     }
 
@@ -192,6 +205,17 @@ class DefaultGateEngine(
         }
     }
 
+    override suspend fun grantOverride(minutes: Int) {
+        mutex.withLock {
+            val now = dayClock.now()
+            val until = now.plusMillis(minutes * 60_000L)
+            overrideStore.set(until)
+            overrideStore.record(now, minutes)
+            refresh(loadBlocks(), refreshMetrics = true)
+            alarmScheduler.scheduleRecheck(until)
+        }
+    }
+
     /** An in-flight session survives the reset on a base-goal day state; an expired one takes its alarm with it. */
     private suspend fun carryOver(block: Block, dayKey: String, now: Instant): BlockDayState? {
         val session = gateStateRepository.get(block.id)?.activeSession ?: return null
@@ -208,13 +232,15 @@ class DefaultGateEngine(
         val (from, to) = dayClock.dayWindow(now)
         armCheckpointAlarms(now, dayKey)
         val checkpoints = checkpointList(now)
+        val override = activeOverride(now)
         val previous = _states.value
-        val autoStart = !checkpointMode && !enforcement.reportsForegroundUse()
+        val autoStart = override == null && !checkpointMode && !enforcement.reportsForegroundUse()
         val next = mutableMapOf<String, GateState>()
         for (block in blocks.filter { it.enabled }) {
             val dayState = expireSession(resolveDayState(block, dayKey), now)
             val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics)
-            var state = evaluator.evaluate(block, dayState, snapshot, now, checkpoints)
+            val judged = evaluator.evaluate(block, dayState, snapshot, now, checkpoints)
+            var state = if (override != null) GateState.Override(judged.progress, override) else judged
             if (autoStart && state is GateState.Open && justUnlocked(previous[block.id], dayState)) {
                 startSession(Evaluated(block, dayState, snapshot, state), now)?.let {
                     state = evaluator.evaluate(block, it, snapshot, now, checkpoints)
@@ -225,6 +251,7 @@ class DefaultGateEngine(
         _states.value = next
         enforcement.applyState(blocks, next)
         announceTransitions(previous, next)
+        if (override == null) scheduleRecheckIfLocked(blocks) else alarmScheduler.scheduleRecheck(override)
     }
 
     /** One notification per block crossing the line, so a closed gate is never silent. */
