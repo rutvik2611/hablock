@@ -145,6 +145,15 @@ class BlockWizardViewModel(
 
     fun setQuery(query: String) = _uiState.update { it.copy(query = query) }
 
+    /** Everything on the launcher except the essentials allowlist. */
+    fun selectAllApps() = _uiState.update { state ->
+        state.copy(selectedPackages = state.apps.map { it.packageName }.toSet()).clampThreshold()
+    }
+
+    fun clearApps() = _uiState.update { state ->
+        state.copy(selectedPackages = emptySet()).clampThreshold()
+    }
+
     fun toggleApp(packageName: String) = _uiState.update { state ->
         val selected = if (packageName in state.selectedPackages) {
             state.selectedPackages - packageName

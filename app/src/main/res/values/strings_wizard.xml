@@ -64,4 +64,6 @@
     <string name="wizard_hint_app_usage">Minutes in an app that earns its keep</string>
     <string name="wizard_unit_steps">steps</string>
     <string name="wizard_unit_minutes">minutes</string>
+    <string name="wizard_select_all">Select all</string>
+    <string name="wizard_select_none">Clear</string>
 </resources>

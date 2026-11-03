@@ -37,6 +37,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hablock.app.R
+import dev.hablock.app.domain.GateConstants
 import dev.hablock.app.domain.model.InstalledApp
 import dev.hablock.app.ui.components.AppIconCookie
 import dev.hablock.app.ui.components.GroupedListItem
@@ -172,7 +174,18 @@ private fun StepApps(uiState: WizardUiState, viewModel: BlockWizardViewModel) {
             shape = CircleShape,
             singleLine = true,
         )
-        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = viewModel::selectAllApps) {
+                Text(stringResource(R.string.wizard_select_all))
+            }
+            TextButton(onClick = viewModel::clearApps) {
+                Text(stringResource(R.string.wizard_select_none))
+            }
+        }
         LazyColumn(
             Modifier.weight(1f, fill = false).heightIn(max = 420.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -226,7 +239,7 @@ private fun StepConditions(uiState: WizardUiState, viewModel: BlockWizardViewMod
                 ConditionCard(draft, uiState, viewModel)
             }
             item { ThresholdPanel(uiState, viewModel) }
-            item { RatchetPanel(uiState, viewModel) }
+            if (!GateConstants.CHECKPOINT_MODE) item { RatchetPanel(uiState, viewModel) }
         }
         WizardFooter(
             hint = if (uiState.conditionCount == 0) stringResource(R.string.wizard_conditions_hint) else "",
@@ -404,7 +417,9 @@ private fun StepName(uiState: WizardUiState, viewModel: BlockWizardViewModel) {
                     stringResource(R.string.wizard_summary_opens_on),
                     stringResource(R.string.wizard_n_of_m, uiState.thresholdN, uiState.conditionCount),
                 )
-                SummaryRow(stringResource(R.string.wizard_summary_ratchet), formatPercent(uiState.incrementPct))
+                if (!GateConstants.CHECKPOINT_MODE) {
+                    SummaryRow(stringResource(R.string.wizard_summary_ratchet), formatPercent(uiState.incrementPct))
+                }
             }
         }
         Box(contentAlignment = Alignment.Center) {
