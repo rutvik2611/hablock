@@ -43,7 +43,7 @@ class LocationSampler(
         val now = Instant.now()
         val dayKey = dayClock.dayKey(now)
         val state = locationStore.day() ?: DwellDayState(dayKey = dayKey)
-        val matched = DwellTracker.matchedPlace(config.places, location.latitude, location.longitude)
+        val matched = DwellTracker.countedPlace(config.places, location.latitude, location.longitude)
         locationStore.saveDay(
             DwellTracker.apply(
                 state = state,

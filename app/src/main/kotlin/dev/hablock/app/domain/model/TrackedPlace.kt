@@ -11,6 +11,11 @@ data class TrackedPlace(
     val latitude: Double,
     val longitude: Double,
     val radiusMeters: Double = 150.0,
+    /**
+     * True for a place that must never earn dwell credit — home, above all. A gym inside the same
+     * building as home cannot be told apart by radius, so sitting at home would otherwise count as a visit.
+     */
+    val excluded: Boolean = false,
 )
 
 /**
@@ -83,6 +88,18 @@ object DwellTracker {
     /** The first tracked place containing the reading, or null when outside all of them. */
     fun matchedPlace(places: List<TrackedPlace>, lat: Double, lon: Double): TrackedPlace? =
         places.firstOrNull { distanceMeters(lat, lon, it.latitude, it.longitude) <= it.radiusMeters }
+
+    /**
+     * The place that earns credit for this reading, or null when nothing should.
+     *
+     * An excluded place wins over any counted one it overlaps: if the phone is at home, the gym next door
+     * inside the same building earns nothing. This is what stops a lazy day at home from passing the rule.
+     */
+    fun countedPlace(places: List<TrackedPlace>, lat: Double, lon: Double): TrackedPlace? {
+        val inside = places.filter { distanceMeters(lat, lon, it.latitude, it.longitude) <= it.radiusMeters }
+        if (inside.any { it.excluded }) return null
+        return inside.firstOrNull()
+    }
 
     fun requiredMillis(config: LocationRule): Long = config.requiredMinutes * 60_000L
 

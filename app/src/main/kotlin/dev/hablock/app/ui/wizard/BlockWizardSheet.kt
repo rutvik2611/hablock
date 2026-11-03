@@ -500,17 +500,19 @@ private fun ConditionKind.goalUnit(): String = when (this) {
 private fun PlacePicker(draft: ConditionDraft, uiState: WizardUiState, viewModel: BlockWizardViewModel) {
     var adding by remember { mutableStateOf(false) }
     val chosen = draft.placeIds.firstOrNull()
+    // A home place exists to be excluded, so it is never offered as a requirement.
+    val counted = uiState.places.filterNot { it.excluded }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // With one gym there is nothing to choose, so it is not presented as a choice.
         when {
-            uiState.places.isEmpty() -> Text(
+            counted.isEmpty() -> Text(
                 stringResource(R.string.wizard_place_none),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            uiState.places.size == 1 -> {
-                val only = uiState.places.first()
+            counted.size == 1 -> {
+                val only = counted.first()
                 PlaceRadioRow(
                     label = stringResource(R.string.wizard_place_radius, only.name, only.radiusMeters.toInt()),
                     selected = true,
@@ -528,7 +530,7 @@ private fun PlacePicker(draft: ConditionDraft, uiState: WizardUiState, viewModel
                     selected = chosen == null,
                     onClick = { viewModel.selectPlace(draft.id, null) },
                 )
-                uiState.places.forEach { place ->
+                counted.forEach { place ->
                     PlaceRadioRow(
                         label = stringResource(R.string.wizard_place_radius, place.name, place.radiusMeters.toInt()),
                         selected = chosen == place.id,

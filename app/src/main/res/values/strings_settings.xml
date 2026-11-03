@@ -57,8 +57,11 @@
     <string name="settings_location_any_place">Any tracked place</string>
     <string name="settings_location_any_place_hint">Counts time at any of these places</string>
     <string name="settings_location_add_gym">Add a gym</string>
-    <string name="settings_location_gym_hint">Pick one as the default with the radio, or add another gym.</string>
+    <string name="settings_location_gym_hint">Pick one with the radio as the default, or add another gym.</string>
+    <string name="settings_location_gym_hint_one">Add another place if you also train somewhere else.</string>
     <string name="settings_location_gym_help">Type the coordinates, or use the current location while standing there.</string>
+    <string name="settings_location_home_toggle">This is home — never counts as a visit</string>
+    <string name="settings_location_home_tag">%1$d m · home, never counts</string>
     <string name="settings_location_latitude">Latitude</string>
     <string name="settings_location_longitude">Longitude</string>
     <string name="settings_location_use_here">Use current location</string>

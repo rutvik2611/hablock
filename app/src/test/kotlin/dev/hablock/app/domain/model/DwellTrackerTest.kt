@@ -4,6 +4,8 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DwellTrackerTest {
@@ -76,5 +78,26 @@ class DwellTrackerTest {
         assertTrue(DwellTracker.insideAny(listOf(p), 40.0010, -73.0000))
         assertFalse(DwellTracker.insideAny(listOf(p), 40.0030, -73.0000))
         assertTrue(DwellTracker.distanceMeters(40.0, -73.0, 41.0, -73.0) in 110_000.0..112_000.0)
+    }
+
+    @Test
+    fun `a home place cancels a gym it overlaps`() {
+        val home = TrackedPlace("home", "Home", 25.18928, 55.26410, radiusMeters = 80.0, excluded = true)
+        val gym = TrackedPlace("gym", "Gym", 25.189255, 55.264181, radiusMeters = 150.0)
+        val places = listOf(home, gym)
+
+        // Standing at home: inside both, and home wins.
+        assertNull(DwellTracker.countedPlace(places, 25.18928, 55.26410))
+        // Far away from both: nothing counted.
+        assertNull(DwellTracker.countedPlace(places, 25.18157, 55.27151))
+    }
+
+    @Test
+    fun `a counted place still earns when it is away from home`() {
+        val home = TrackedPlace("home", "Home", 25.18928, 55.26410, radiusMeters = 60.0, excluded = true)
+        val gym = TrackedPlace("gym", "Fitness First", 25.18157, 55.27151, radiusMeters = 120.0)
+        val matched = DwellTracker.countedPlace(listOf(home, gym), 25.18157, 55.27151)
+        assertNotNull(matched)
+        assertEquals("gym", matched!!.id)
     }
 }

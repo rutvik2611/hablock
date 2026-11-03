@@ -9,6 +9,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -125,7 +126,7 @@ fun SettingsScreen() {
                 .fillMaxSize()
                 .padding(top = insets.calculateTopPadding())
                 .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, bottom = 140.dp),
+                .padding(start = 16.dp, end = 16.dp, bottom = 200.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             val hasExactAlarms = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -233,7 +234,10 @@ fun SettingsScreen() {
                 GroupedListItem(
                     position = GroupPosition.Middle,
                     title = only.name,
-                    supporting = stringResource(R.string.settings_location_radius, only.radiusMeters.toInt()),
+                    supporting = stringResource(
+                if (only.excluded) R.string.settings_location_home_tag else R.string.settings_location_radius,
+                only.radiusMeters.toInt(),
+            ),
                     trailing = {
                         TextButton(onClick = { viewModel.removePlace(only.id) }) {
                             Text(stringResource(R.string.settings_location_remove))
@@ -258,7 +262,11 @@ fun SettingsScreen() {
                         position = GroupPosition.Middle,
                         onClick = { viewModel.setDefaultPlace(place.id) },
                         title = place.name,
-                        supporting = stringResource(R.string.settings_location_radius, place.radiusMeters.toInt()),
+                        supporting = if (place.excluded) {
+                            stringResource(R.string.settings_location_home_tag, place.radiusMeters.toInt())
+                        } else {
+                            stringResource(R.string.settings_location_radius, place.radiusMeters.toInt())
+                        },
                         leading = {
                             androidx.compose.material3.RadioButton(
                                 selected = uiState.locationDefaultPlaceId == place.id,
@@ -275,9 +283,12 @@ fun SettingsScreen() {
             }
             GroupedListItem(position = GroupPosition.Last) {
                 GymEditorRow(
-                    enabled = uiState.fineLocation,
+                    fineLocation = uiState.fineLocation,
+                    placeCount = uiState.locationPlaces.size,
                     onHere = { name, radius -> viewModel.addPlaceHere(name, radius) },
-                    onTyped = { name, lat, lon, radius -> viewModel.addPlace(name, lat, lon, radius) },
+                    onTyped = { name, lat, lon, radius, home ->
+                        viewModel.addPlace(name, lat, lon, radius, excluded = home)
+                    },
                 )
             }
 
@@ -474,11 +485,13 @@ private fun RelinquishControls(
  */
 @Composable
 private fun GymEditorRow(
-    enabled: Boolean,
+    fineLocation: Boolean,
+    placeCount: Int,
     onHere: (String, Double) -> Unit,
-    onTyped: (String, Double, Double, Double) -> Unit,
+    onTyped: (String, Double, Double, Double, Boolean) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    var home by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     var radius by remember { mutableStateOf("150") }
     var lat by remember { mutableStateOf("") }
@@ -491,11 +504,14 @@ private fun GymEditorRow(
 
     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            stringResource(if (enabled) R.string.settings_location_gym_hint else R.string.settings_location_need_permission),
+            stringResource(
+                if (placeCount > 1) R.string.settings_location_gym_hint else R.string.settings_location_gym_hint_one,
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button(onClick = { open = true }, enabled = enabled) {
+        // Typing coordinates needs no permission; only the current-fix shortcut does.
+        Button(onClick = { open = true }) {
             Text(stringResource(R.string.settings_location_add_gym))
         }
     }
@@ -537,6 +553,16 @@ private fun GymEditorRow(
                         label = { Text(stringResource(R.string.settings_location_longitude)) },
                         singleLine = true,
                     )
+                    Row(
+                        Modifier.fillMaxWidth().clickable { home = !home },
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.Checkbox(checked = home, onCheckedChange = { home = it })
+                        Text(
+                            stringResource(R.string.settings_location_home_toggle),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                     Text(
                         stringResource(R.string.settings_location_gym_help),
                         style = MaterialTheme.typography.bodySmall,
@@ -547,7 +573,7 @@ private fun GymEditorRow(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onTyped(name, latValue ?: 0.0, lonValue ?: 0.0, radiusValue)
+                        onTyped(name, latValue ?: 0.0, lonValue ?: 0.0, radiusValue, home)
                         open = false
                         name = ""
                         lat = ""
@@ -558,11 +584,14 @@ private fun GymEditorRow(
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = {
-                        onHere(name, radiusValue)
-                        open = false
-                        name = ""
-                    }) { Text(stringResource(R.string.settings_location_use_here)) }
+                    TextButton(
+                        onClick = {
+                            onHere(name, radiusValue)
+                            open = false
+                            name = ""
+                        },
+                        enabled = fineLocation,
+                    ) { Text(stringResource(R.string.settings_location_use_here)) }
                     TextButton(onClick = { open = false }) { Text(stringResource(android.R.string.cancel)) }
                 }
             },

@@ -135,7 +135,13 @@ class SettingsViewModel(
     }
 
     /** Adds a gym from typed coordinates, so it can be set up away from the building. */
-    fun addPlace(name: String, latitude: Double, longitude: Double, radiusMeters: Double) =
+    fun addPlace(
+        name: String,
+        latitude: Double,
+        longitude: Double,
+        radiusMeters: Double,
+        excluded: Boolean = false,
+    ) =
         viewModelScope.launch {
             val rule = locationStore.config()
             val place = dev.hablock.app.domain.model.TrackedPlace(
@@ -144,12 +150,13 @@ class SettingsViewModel(
                 latitude = latitude,
                 longitude = longitude,
                 radiusMeters = radiusMeters.coerceIn(50.0, 2000.0),
+                excluded = excluded,
             )
             locationStore.saveConfig(
                 rule.copy(
                     enabled = true,
                     places = rule.places + place,
-                    defaultPlaceId = rule.defaultPlaceId ?: place.id,
+                    defaultPlaceId = rule.defaultPlaceId ?: place.id.takeUnless { excluded },
                 ),
             )
             gateEngine.refreshAll()
