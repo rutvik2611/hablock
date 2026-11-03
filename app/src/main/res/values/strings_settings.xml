@@ -49,14 +49,14 @@
     <string name="settings_section_location">Location rule</string>
     <string name="settings_location_access">Location access</string>
     <string name="settings_location_background">Background location</string>
-    <string name="settings_location_require">Require a place visit</string>
+    <string name="settings_location_require">Require time in a zone</string>
     <string name="settings_location_summary">%1$d min by 8:00 PM · %2$d min today</string>
     <string name="settings_location_radius">%1$d m radius</string>
     <string name="settings_location_remove">Remove</string>
     <string name="settings_location_add">Add this place</string>
     <string name="settings_location_any_place">Any tracked place</string>
     <string name="settings_location_any_place_hint">Counts time at any of these places</string>
-    <string name="settings_location_add_gym">Add a gym</string>
+    <string name="settings_location_add_gym">Add a zone</string>
     <string name="settings_location_gym_hint">Pick one with the radio as the default, or add another gym.</string>
     <string name="settings_location_gym_hint_one">Add another place if you also train somewhere else.</string>
     <string name="settings_location_gym_help">Type the coordinates, or use the current location while standing there.</string>

@@ -12,12 +12,12 @@
     <string name="status_done">Done</string>
 
     <string name="nav_blocks">Blocks</string>
-    <string name="nav_places">Places</string>
-    <string name="places_title">Places</string>
-    <string name="places_subtitle">Gym and other places where time counts. Separate from the step clock.</string>
+    <string name="nav_places">Zones</string>
+    <string name="places_title">Zones</string>
+    <string name="places_subtitle">Gym, home and work, as circles on the map. Separate from the step clock.</string>
     <string name="places_section_rule">Rule</string>
-    <string name="places_section_saved">Saved places</string>
-    <string name="places_empty">No places yet</string>
+    <string name="places_section_saved">Your zones</string>
+    <string name="places_empty">No zones yet</string>
     <string name="places_empty_hint">Add the gym you actually go to.</string>
     <string name="places_custom">Custom</string>
     <string name="places_record_fence">Walk the boundary</string>
@@ -26,7 +26,7 @@
     <string name="places_record_need_more">Keep walking — at least four points are needed.</string>
     <string name="places_record_done_radius">Fence ready: %1$d m radius from %2$d points</string>
     <string name="places_record_save">Use this fence</string>
-    <string name="places_editor_title">Add a place</string>
+    <string name="places_editor_title">Add a zone</string>
     <string name="places_use_current">Use my current location</string>
     <string name="places_minutes">Minutes</string>
     <string name="places_by_hour">By hour (0-23)</string>
