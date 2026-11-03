@@ -145,7 +145,7 @@ class DefaultGateEngine(
             val evaluated = affected.map { block ->
                 val dayState = expireSession(resolveDayState(block, dayKey), now)
                 val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics = false)
-                val judged = evaluator.evaluate(block, dayState, snapshot, now, checkpoints)
+                val judged = evaluator.evaluate(block, dayState, snapshot, now, checkpoints, dayClock.zoneId)
                 val state = if (override != null) GateState.Override(judged.progress, override) else judged
                 Evaluated(block, dayState, snapshot, state)
             }
@@ -277,7 +277,7 @@ class DefaultGateEngine(
         for (block in blocks.filter { it.enabled }) {
             val dayState = expireSession(resolveDayState(block, dayKey), now)
             val snapshot = snapshotFor(block.conditions, from, to, now, dayKey, refreshMetrics)
-            val judged = evaluator.evaluate(block, dayState, snapshot, now, checkpoints)
+            val judged = evaluator.evaluate(block, dayState, snapshot, now, checkpoints, dayClock.zoneId)
             var state = when {
                 override != null -> GateState.Override(judged.progress, override)
                 locationShort -> GateState.Locked(judged.progress, evaluator.effectiveThreshold(block))
@@ -285,7 +285,7 @@ class DefaultGateEngine(
             }
             if (autoStart && state is GateState.Open && justUnlocked(previous[block.id], dayState)) {
                 startSession(Evaluated(block, dayState, snapshot, state), now)?.let {
-                    state = evaluator.evaluate(block, it, snapshot, now, checkpoints)
+                    state = evaluator.evaluate(block, it, snapshot, now, checkpoints, dayClock.zoneId)
                 }
             }
             next[block.id] = state

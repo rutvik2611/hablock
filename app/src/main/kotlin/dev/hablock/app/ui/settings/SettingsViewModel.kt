@@ -9,6 +9,7 @@ import dev.hablock.app.domain.repository.HealthRepository
 import dev.hablock.app.domain.repository.PermissionChecker
 import dev.hablock.app.domain.service.RelinquishTimer
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,9 @@ data class SettingsUiState(
     val locationRequiredMinutes: Int = 30,
     val locationPlaces: List<dev.hablock.app.domain.model.TrackedPlace> = emptyList(),
     val locationDefaultPlaceId: String? = null,
+    val checkInPlaceName: String? = null,
+    val checkInMinutes: Long = 0L,
+    val checkInNotice: String? = null,
     val locationMinutesToday: Long = 0,
     val fineLocation: Boolean = false,
     val backgroundLocation: Boolean = false,
@@ -74,6 +78,10 @@ class SettingsViewModel(
                 locationRequiredMinutes = rule.requiredMinutes,
                 locationPlaces = rule.places,
                 locationDefaultPlaceId = rule.defaultPlaceId,
+                checkInPlaceName = day?.checkInPlaceId?.let { id -> rule.places.firstOrNull { it.id == id }?.name },
+                checkInMinutes = day?.checkInSinceMillis?.takeIf { it > 0 }?.let {
+                    ((System.currentTimeMillis() - it) / 60_000L).coerceAtLeast(0L)
+                } ?: 0L,
                 locationMinutesToday = (day?.accumulatedMillis ?: 0L) / 60_000L,
             )
             val availability = runCatching { healthRepository.availability() }.getOrDefault(HcAvailability.UNAVAILABLE)
@@ -108,7 +116,7 @@ class SettingsViewModel(
             name = name.ifBlank { "Place ${rule.places.size + 1}" },
             latitude = fix.latitude,
             longitude = fix.longitude,
-            radiusMeters = radiusMeters.coerceIn(50.0, 2000.0),
+            radiusMeters = radiusMeters.coerceIn(5.0, 2000.0),
         )
         locationStore.saveConfig(rule.copy(enabled = true, places = rule.places + place))
         gateEngine.refreshAll()
@@ -123,6 +131,53 @@ class SettingsViewModel(
                 defaultPlaceId = rule.defaultPlaceId?.takeIf { it != id },
             ),
         )
+        gateEngine.refreshAll()
+        refresh()
+    }
+
+    /**
+     * "I'm here": the person tells the app they are at a place, and the minutes start counting.
+     *
+     * Validated against the current fix, so tapping it from the sofa does not open the gate: the check-in
+     * is refused unless the phone is inside that place, and the refusal says how far away it is.
+     */
+    fun checkIn(placeId: String) = viewModelScope.launch {
+        val place = locationStore.config().places.firstOrNull { it.id == placeId }
+            ?: return@launch
+        val fix = runCatching { locationSampler.currentLocation() }.getOrNull()
+        if (fix == null) {
+            _uiState.update { it.copy(checkInNotice = "No location fix yet. Try again in a moment.") }
+            return@launch
+        }
+        val distance = dev.hablock.app.domain.model.DwellTracker.distanceMeters(
+            fix.latitude,
+            fix.longitude,
+            place.latitude,
+            place.longitude,
+        )
+        if (distance > place.radiusMeters) {
+            _uiState.update {
+                it.copy(checkInNotice = "You are ${distance.toInt()} m from ${place.name}. Check-in needs you inside it.")
+            }
+            return@launch
+        }
+        val now = dayClock.now()
+        val dayKey = dayClock.dayKey(now)
+        val day = locationStore.day()?.takeIf { it.dayKey == dayKey } ?: dev.hablock.app.domain.model.DwellDayState(dayKey = dayKey)
+        locationStore.saveDay(
+            day.copy(checkInPlaceId = placeId, checkInSinceMillis = now.toEpochMilli()),
+        )
+        _uiState.update { it.copy(checkInNotice = null) }
+        // One reading now, so the next tick credits the gap from this moment on.
+        runCatching { locationSampler.sample() }
+        gateEngine.refreshAll()
+        refresh()
+    }
+
+    fun checkOut() = viewModelScope.launch {
+        val day = locationStore.day() ?: return@launch
+        locationStore.saveDay(day.copy(checkInPlaceId = null, checkInSinceMillis = 0L))
+        runCatching { locationSampler.sample() }
         gateEngine.refreshAll()
         refresh()
     }
@@ -149,7 +204,7 @@ class SettingsViewModel(
                 name = name.ifBlank { "Gym ${rule.places.size + 1}" },
                 latitude = latitude,
                 longitude = longitude,
-                radiusMeters = radiusMeters.coerceIn(50.0, 2000.0),
+                radiusMeters = radiusMeters.coerceIn(5.0, 2000.0),
                 excluded = excluded,
             )
             locationStore.saveConfig(

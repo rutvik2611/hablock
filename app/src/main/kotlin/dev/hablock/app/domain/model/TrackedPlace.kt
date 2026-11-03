@@ -41,6 +41,9 @@ data class DwellDayState(
     val lastInside: Boolean = false,
     /** Presence per tracked place id, so one gym can be required without another satisfying it. */
     val perPlaceMillis: Map<String, Long> = emptyMap(),
+    /** Set while the user has told the app they are at a place ("I'm here"). */
+    val checkInPlaceId: String? = null,
+    val checkInSinceMillis: Long = 0L,
 ) {
     val accumulatedMinutes: Long get() = accumulatedMillis / 60_000L
 

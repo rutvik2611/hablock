@@ -281,6 +281,37 @@ fun SettingsScreen() {
                     )
                 }
             }
+            // "I'm here": the person says they are at the gym, so time counts without waiting on a sample.
+            val countedPlaces = uiState.locationPlaces.filterNot { it.excluded }
+            if (countedPlaces.isNotEmpty()) {
+                val name = uiState.checkInPlaceName
+                GroupedListItem(
+                    position = GroupPosition.Middle,
+                    title = if (name != null) {
+                        stringResource(R.string.settings_checkin_at, name)
+                    } else {
+                        stringResource(R.string.settings_checkin_ask)
+                    },
+                    supporting = when {
+                        uiState.checkInNotice != null -> uiState.checkInNotice
+                        name != null -> stringResource(R.string.settings_checkin_counted, uiState.checkInMinutes)
+                        else -> stringResource(R.string.settings_checkin_hint)
+                    },
+                    trailing = {
+                        TextButton(
+                            onClick = {
+                                if (name != null) viewModel.checkOut() else viewModel.checkIn(countedPlaces.first().id)
+                            },
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (name != null) R.string.settings_checkin_stop else R.string.settings_checkin_start,
+                                ),
+                            )
+                        }
+                    },
+                )
+            }
             GroupedListItem(position = GroupPosition.Last) {
                 GymEditorRow(
                     fineLocation = uiState.fineLocation,
@@ -537,7 +568,7 @@ private fun GymEditorRow(
                         ),
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        listOf(100, 150, 250, 500).forEach { preset ->
+                        listOf(5, 25, 100, 150, 250, 500).forEach { preset ->
                             TextButton(onClick = { radius = preset.toString() }) { Text("$preset m") }
                         }
                     }

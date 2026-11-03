@@ -44,15 +44,23 @@ class LocationSampler(
         val dayKey = dayClock.dayKey(now)
         val state = locationStore.day() ?: DwellDayState(dayKey = dayKey)
         val matched = DwellTracker.countedPlace(config.places, location.latitude, location.longitude)
+        // A check-in holds only while the phone is still at that place; leaving ends it.
+        val stillThere = matched != null &&
+            (state.checkInPlaceId == null || state.checkInPlaceId == matched.id)
+        val next = DwellTracker.apply(
+            state = state,
+            dayKey = dayKey,
+            now = now,
+            inside = matched != null,
+            maxStepMillis = GateConstants.LOCATION_MAX_CREDIT_MILLIS,
+            placeId = matched?.id,
+        )
         locationStore.saveDay(
-            DwellTracker.apply(
-                state = state,
-                dayKey = dayKey,
-                now = now,
-                inside = matched != null,
-                maxStepMillis = GateConstants.LOCATION_MAX_CREDIT_MILLIS,
-                placeId = matched?.id,
-            ),
+            if (state.checkInPlaceId != null && !stillThere) {
+                next.copy(checkInPlaceId = null, checkInSinceMillis = 0L)
+            } else {
+                next
+            },
         )
     }
 

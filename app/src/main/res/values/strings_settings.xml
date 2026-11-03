@@ -62,6 +62,12 @@
     <string name="settings_location_gym_help">Type the coordinates, or use the current location while standing there.</string>
     <string name="settings_location_home_toggle">This is home — never counts as a visit</string>
     <string name="settings_location_home_tag">%1$d m · home, never counts</string>
+    <string name="settings_checkin_ask">I\&#8217;m at the gym now</string>
+    <string name="settings_checkin_hint">Tell the app you are there, and the minutes start counting.</string>
+    <string name="settings_checkin_at">At %1$s</string>
+    <string name="settings_checkin_counted">%1$d min counted since you told the app</string>
+    <string name="settings_checkin_start">I\&#8217;m here</string>
+    <string name="settings_checkin_stop">I left</string>
     <string name="settings_location_latitude">Latitude</string>
     <string name="settings_location_longitude">Longitude</string>
     <string name="settings_location_use_here">Use current location</string>

@@ -197,7 +197,7 @@ class BlockWizardViewModel(
                 name = name.ifBlank { "Gym ${rule.places.size + 1}" },
                 latitude = latitude,
                 longitude = longitude,
-                radiusMeters = radiusMeters.coerceIn(50.0, 2_000.0),
+                radiusMeters = radiusMeters.coerceIn(5.0, 2_000.0),
             )
             locationStore.saveConfig(rule.copy(enabled = true, places = rule.places + place))
             _uiState.update { it.copy(places = it.places + place) }
