@@ -11,6 +11,8 @@ import dev.hablock.app.domain.repository.BlockRepository
 import dev.hablock.app.domain.repository.HealthRepository
 import dev.hablock.app.domain.service.GateEngine
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +29,8 @@ data class BlockedUiState(
         get() = state?.progress ?: block?.conditions?.map { ConditionProgress(it, 0.0, it.goal) }.orEmpty()
 }
 
+private const val POLL_MILLIS = 20_000L
+
 class BlockedViewModel(
     blockRepository: BlockRepository,
     private val gateEngine: GateEngine,
@@ -42,6 +46,17 @@ class BlockedViewModel(
             val block = blocks.firstOrNull { it.id == blockId }
             BlockedUiState(block, states[blockId], hc && block?.usesHealthConnect() == true)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BlockedUiState())
+
+    init {
+        // While the user sits on the block screen the step count keeps moving; poll so the gate
+        // reopens on its own as soon as the checkpoint target is reached.
+        viewModelScope.launch {
+            while (isActive) {
+                delay(POLL_MILLIS)
+                gateEngine.refreshAll()
+            }
+        }
+    }
 
     fun refreshHcStatus() {
         viewModelScope.launch { updateHcProblem() }

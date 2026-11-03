@@ -4,11 +4,14 @@ import dev.hablock.app.domain.model.BlockDayState
 import dev.hablock.app.domain.model.Condition
 import dev.hablock.app.domain.model.GateState
 import dev.hablock.app.domain.model.Session
+import dev.hablock.app.domain.model.StepCheckpoint
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+
+private const val EPS = 1e-3
 
 class GateEvaluatorTest {
 
@@ -124,46 +127,77 @@ class GateEvaluatorTest {
         assertIs<GateState.Open>(evaluator.evaluate(block, dayState, snapshot, now))
     }
 
-    // --- deadline mode -------------------------------------------------------
+    // --- step checkpoints ----------------------------------------------------
 
-    private val deadlineAt: Instant = now.plusSeconds(7 * 3600)
+    private val noon = Instant.parse("2026-08-25T12:00:00Z")
+    private val evening = Instant.parse("2026-08-25T17:00:00Z")
+    private val checkpoints = listOf(
+        StepCheckpoint(noon, 4_000.0),
+        StepCheckpoint(evening, 10_000.0),
+    )
 
-    @Test
-    fun `before the deadline an unmet goal warns and does not lock`() {
-        val block = testBlock(conditions = conditions, thresholdN = 1)
-        val state = evaluator.evaluate(block, null, snapshotOf("steps" to 4_000.0), now, deadlineAt)
-        assertIs<GateState.Warn>(state)
-        assertEquals(deadlineAt, state.deadline)
-        assertEquals(0, state.metCount)
-    }
+    private fun stepsBlock() = testBlock(conditions = listOf(Condition.Steps("steps", 10_000.0)), thresholdN = 1)
 
     @Test
-    fun `at the deadline instant the gate locks`() {
-        val block = testBlock(conditions = conditions, thresholdN = 1)
-        assertIs<GateState.Locked>(evaluator.evaluate(block, null, snapshotOf(), deadlineAt))
-    }
-
-    @Test
-    fun `after the deadline an unmet goal stays locked`() {
-        val block = testBlock(conditions = conditions, thresholdN = 1)
-        val later = deadlineAt.plusSeconds(3600)
-        assertIs<GateState.Locked>(evaluator.evaluate(block, null, snapshotOf(), later, deadlineAt))
-    }
-
-    @Test
-    fun `meeting the goal opens the gate before and after the deadline`() {
-        val block = testBlock(conditions = conditions, thresholdN = 1)
-        val met = snapshotOf("steps" to 10_000.0)
-        assertIs<GateState.Open>(evaluator.evaluate(block, null, met, now, deadlineAt))
-        assertIs<GateState.Open>(
-            evaluator.evaluate(block, null, met, deadlineAt.plusSeconds(60), deadlineAt),
+    fun `before the first checkpoint the day is open with a warning`() {
+        val state = evaluator.evaluate(
+            stepsBlock(), null, snapshotOf("steps" to 200.0), noon.minusSeconds(3600), checkpoints,
         )
+        assertIs<GateState.Warn>(state)
+        assertEquals(4_000.0, state.nextSteps, EPS)
+        assertEquals(noon, state.deadline)
     }
 
     @Test
-    fun `without a deadline the gate still locks immediately`() {
-        val block = testBlock(conditions = conditions, thresholdN = 1)
-        assertIs<GateState.Locked>(evaluator.evaluate(block, null, snapshotOf(), now))
+    fun `one step short at noon locks the gate against the noon target`() {
+        val state = evaluator.evaluate(
+            stepsBlock(), null, snapshotOf("steps" to 3_999.0), noon, checkpoints,
+        )
+        assertIs<GateState.Locked>(state)
+        assertEquals(4_000.0, state.progress.single().required, EPS)
+    }
+
+    @Test
+    fun `meeting noon keeps the day open and points at five`() {
+        val state = evaluator.evaluate(
+            stepsBlock(), null, snapshotOf("steps" to 4_000.0), noon, checkpoints,
+        )
+        assertIs<GateState.Warn>(state)
+        assertEquals(10_000.0, state.nextSteps, EPS)
+        assertEquals(evening, state.deadline)
+    }
+
+    @Test
+    fun `walking past the noon target reopens the gate by itself`() {
+        val state = evaluator.evaluate(
+            stepsBlock(), null, snapshotOf("steps" to 4_050.0), noon.plusSeconds(300), checkpoints,
+        )
+        assertIs<GateState.Warn>(state)
+        // Noon is behind us, so progress now points at the five o'clock target.
+        assertEquals(10_000.0, state.progress.single().required, EPS)
+        assertEquals(10_000.0, state.nextSteps, EPS)
+    }
+
+    @Test
+    fun `missing five o'clock locks even when noon was met`() {
+        val state = evaluator.evaluate(
+            stepsBlock(), null, snapshotOf("steps" to 9_500.0), evening, checkpoints,
+        )
+        assertIs<GateState.Locked>(state)
+        assertEquals(10_000.0, state.progress.single().required, EPS)
+    }
+
+    @Test
+    fun `ten thousand by five is open for the rest of the day`() {
+        val state = evaluator.evaluate(
+            stepsBlock(), null, snapshotOf("steps" to 10_000.0), evening.plusSeconds(60), checkpoints,
+        )
+        assertIs<GateState.Open>(state)
+    }
+
+    @Test
+    fun `without checkpoints the classic lock still applies`() {
+        assertIs<GateState.Locked>(evaluator.evaluate(stepsBlock(), null, snapshotOf("steps" to 0.0), noon))
     }
 
     private fun dayState(

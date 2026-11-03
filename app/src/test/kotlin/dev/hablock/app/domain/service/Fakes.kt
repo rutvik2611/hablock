@@ -101,7 +101,8 @@ class FakeAlarmScheduler : AlarmScheduler {
     val cancelledSessions = mutableListOf<String>()
     val dayResets = mutableListOf<Instant>()
     val relinquishReady = mutableListOf<Instant>()
-    val deadlines = mutableListOf<Instant>()
+    val checkpoints = mutableListOf<Triple<Instant, Double, Boolean>>()
+    val rechecks = mutableListOf<Instant>()
     var cancelRelinquishReadyCount = 0
         private set
 
@@ -117,8 +118,12 @@ class FakeAlarmScheduler : AlarmScheduler {
         dayResets += at
     }
 
-    override fun scheduleDeadline(at: Instant) {
-        deadlines += at
+    override fun scheduleCheckpoint(at: Instant, steps: Double, warning: Boolean) {
+        checkpoints += Triple(at, steps, warning)
+    }
+
+    override fun scheduleRecheck(at: Instant) {
+        rechecks += at
     }
 
     override fun scheduleRelinquishReady(at: Instant) {
@@ -132,8 +137,24 @@ class FakeAlarmScheduler : AlarmScheduler {
 
 class FakeNotifier : Notifier {
     val sessionsEnded = mutableListOf<Pair<String, String>>()
+    val warnings = mutableListOf<Triple<Double, Double, Instant>>()
+    val closed = mutableListOf<Pair<Double, Double>>()
+    var openedCount = 0
+        private set
     var relinquishReadyCount = 0
         private set
+
+    override fun checkpointWarning(stepsRemaining: Double, stepsTarget: Double, at: Instant) {
+        warnings += Triple(stepsRemaining, stepsTarget, at)
+    }
+
+    override fun gateClosed(stepsRemaining: Double, stepsTarget: Double) {
+        closed += stepsRemaining to stepsTarget
+    }
+
+    override fun gateOpened() {
+        openedCount++
+    }
 
     override fun sessionEnded(blockId: String, blockName: String) {
         sessionsEnded += blockId to blockName

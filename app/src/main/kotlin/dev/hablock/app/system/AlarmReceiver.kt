@@ -21,7 +21,9 @@ class AlarmReceiver : BroadcastReceiver() {
                     GateConstants.ACTION_SESSION_EXPIRED ->
                         blockId?.let { container.gateEngine.onSessionExpired(it) }
                     GateConstants.ACTION_DAY_RESET -> container.gateEngine.onDayReset()
-                    GateConstants.ACTION_DEADLINE_REACHED -> container.gateEngine.onDeadlineReached()
+                    GateConstants.ACTION_CHECKPOINT_REACHED -> container.gateEngine.onCheckpointReached()
+                    GateConstants.ACTION_CHECKPOINT_WARNING -> container.gateEngine.onCheckpointWarning()
+                    GateConstants.ACTION_RECHECK -> container.gateEngine.onRecheck()
                     GateConstants.ACTION_RELINQUISH_READY -> container.notifier.relinquishReady()
                 }
             } finally {

@@ -38,7 +38,7 @@ class DefaultGateEngineTest {
     private val notifier = FakeNotifier()
     private val enforcement = FakeEnforcement()
 
-    private fun newEngine(scope: CoroutineScope, deadlineMode: Boolean = false) = DefaultGateEngine(
+    private fun newEngine(scope: CoroutineScope, checkpointMode: Boolean = false) = DefaultGateEngine(
         blockRepository = blockRepository,
         gateStateRepository = gateStateRepository,
         metricProvider = metricProvider,
@@ -48,7 +48,7 @@ class DefaultGateEngineTest {
         enforcement = enforcement,
         sessionDuration = 30.minutes,
         scope = scope,
-        deadlineMode = deadlineMode,
+        checkpointMode = checkpointMode,
     )
 
     @Test
@@ -312,49 +312,84 @@ class DefaultGateEngineTest {
         assertEquals(listOf(engine.states.value), enforcement.applied)
     }
 
-    // --- deadline mode -------------------------------------------------------
+    // --- step checkpoints ----------------------------------------------------
 
     @Test
-    fun `deadline mode stays open until five and arms the closing alarm`() = runTest {
-        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
-        val engine = newEngine(backgroundScope, deadlineMode = true)
-        engine.refreshAll() // clock is 11:00 Berlin, deadline 17:00 Berlin
+    fun `checkpoint mode is open at eleven and arms both checkpoints with warnings`() = runTest {
+        metricProvider.values = mapOf("steps" to 200.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        engine.refreshAll() // 11:00 Berlin
 
         assertIs<GateState.Warn>(engine.states.value.getValue("b1"))
         assertTrue(enforcement.blocked.isEmpty())
-        assertTrue(alarmScheduler.sessionEnds.isEmpty())
-        assertEquals(Instant.parse("2026-08-23T15:00:00Z"), alarmScheduler.deadlines.single())
+        // 12:00 due, 11:30 warning, 17:00 due, 16:30 warning
+        assertEquals(
+            listOf(
+                Instant.parse("2026-08-23T09:30:00Z") to true,
+                Instant.parse("2026-08-23T10:00:00Z") to false,
+                Instant.parse("2026-08-23T14:30:00Z") to true,
+                Instant.parse("2026-08-23T15:00:00Z") to false,
+            ),
+            alarmScheduler.checkpoints.sortedBy { it.first }.map { it.first to it.third },
+        )
     }
 
     @Test
-    fun `deadline mode locks once five in the afternoon has passed`() = runTest {
-        metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
-        val engine = newEngine(backgroundScope, deadlineMode = true)
-        clock.current = Instant.parse("2026-08-23T15:00:01Z")
+    fun `missing noon closes the gate and notifies`() = runTest {
+        metricProvider.values = mapOf("steps" to 3_000.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        clock.current = Instant.parse("2026-08-23T09:59:00Z") // 11:59 Berlin
         engine.refreshAll()
+        assertIs<GateState.Warn>(engine.states.value.getValue("b1"))
+
+        clock.current = Instant.parse("2026-08-23T10:00:00Z") // 12:00 Berlin
+        engine.onCheckpointReached()
 
         assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+        assertEquals(listOf(1_000.0 to 4_000.0), notifier.closed)
+        assertEquals(1, alarmScheduler.rechecks.size)
     }
 
     @Test
-    fun `deadline mode opens for the rest of the day when the goal is met`() = runTest {
-        metricProvider.values = mapOf("steps" to 10_000.0, "workout" to 0.0)
-        val engine = newEngine(backgroundScope, deadlineMode = true)
+    fun `walking to the noon target reopens the gate and stops the rechecks`() = runTest {
+        metricProvider.values = mapOf("steps" to 3_000.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        clock.current = Instant.parse("2026-08-23T10:00:00Z")
+        engine.onCheckpointReached()
+        assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+
+        metricProvider.values = mapOf("steps" to 4_100.0, "workout" to 0.0)
+        clock.advance(5 * 60 * 1000)
+        engine.onRecheck()
+
+        assertIs<GateState.Warn>(engine.states.value.getValue("b1"))
+        assertEquals(1, notifier.openedCount)
+        assertEquals(1, alarmScheduler.rechecks.size, "no further poll once the gate is open")
+    }
+
+    @Test
+    fun `five o'clock still closes the gate after a met noon`() = runTest {
+        metricProvider.values = mapOf("steps" to 4_500.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        clock.current = Instant.parse("2026-08-23T10:05:00Z")
         engine.refreshAll()
+        assertIs<GateState.Warn>(engine.states.value.getValue("b1"))
 
-        assertIs<GateState.Open>(engine.states.value.getValue("b1"))
-        assertTrue(alarmScheduler.sessionEnds.isEmpty(), "deadline mode must not spend the day in sessions")
-        assertTrue(enforcement.blocked.isEmpty())
+        clock.current = Instant.parse("2026-08-23T15:00:00Z") // 17:00 Berlin
+        engine.onCheckpointReached()
+
+        assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
+        assertEquals(listOf(5_500.0 to 10_000.0), notifier.closed)
     }
 
     @Test
-    fun `deadline alarm covers the app that is already on screen`() = runTest {
+    fun `the checkpoint alarm covers the app already on screen`() = runTest {
         metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
-        val engine = newEngine(backgroundScope, deadlineMode = true)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
         clock.current = Instant.parse("2026-08-23T15:00:00Z")
         ForegroundState.packageName = SOCIAL
         try {
-            engine.onDeadlineReached()
+            engine.onCheckpointReached()
             assertEquals(listOf(SOCIAL to "b1"), enforcement.blocked)
         } finally {
             ForegroundState.packageName = null
@@ -362,12 +397,30 @@ class DefaultGateEngineTest {
     }
 
     @Test
-    fun `classic mode is untouched by the deadline plumbing`() = runTest {
+    fun `the warning fires only while a shortfall remains`() = runTest {
+        metricProvider.values = mapOf("steps" to 1_000.0, "workout" to 0.0)
+        val engine = newEngine(backgroundScope, checkpointMode = true)
+        clock.current = Instant.parse("2026-08-23T09:30:00Z") // 11:30 Berlin
+        engine.onCheckpointWarning()
+
+        assertEquals(1, notifier.warnings.size)
+        assertEquals(3_000.0, notifier.warnings.single().first)
+        assertEquals(4_000.0, notifier.warnings.single().second)
+
+        metricProvider.values = mapOf("steps" to 4_200.0, "workout" to 0.0)
+        clock.advance(60_000)
+        engine.onCheckpointWarning()
+        assertEquals(1, notifier.warnings.size, "no reminder for a target already met")
+    }
+
+    @Test
+    fun `classic mode is untouched by the checkpoint plumbing`() = runTest {
         metricProvider.values = mapOf("steps" to 0.0, "workout" to 0.0)
-        val engine = newEngine(backgroundScope, deadlineMode = false)
+        val engine = newEngine(backgroundScope, checkpointMode = false)
         engine.refreshAll()
 
         assertIs<GateState.Locked>(engine.states.value.getValue("b1"))
-        assertTrue(alarmScheduler.deadlines.isEmpty())
+        assertTrue(alarmScheduler.checkpoints.isEmpty())
+        assertTrue(alarmScheduler.rechecks.isEmpty())
     }
 }

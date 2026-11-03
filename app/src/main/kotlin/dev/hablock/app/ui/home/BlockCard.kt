@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.hablock.app.R
 import dev.hablock.app.domain.model.Block
+import dev.hablock.app.domain.model.Condition
+import dev.hablock.app.domain.model.ConditionProgress
 import dev.hablock.app.domain.model.GateState
 import dev.hablock.app.ui.components.AppShapeCluster
 import dev.hablock.app.ui.components.BigNumerals
@@ -43,6 +45,7 @@ import dev.hablock.app.ui.components.ConditionMeter
 import dev.hablock.app.ui.components.MorphingGateBadge
 import dev.hablock.app.ui.components.rememberTicker
 import dev.hablock.app.ui.format.formatClock
+import dev.hablock.app.ui.format.groupedInt
 import dev.hablock.app.ui.format.formatCountdown
 import java.time.Instant
 import kotlin.time.Duration.Companion.milliseconds
@@ -163,19 +166,14 @@ private fun statusLine(paused: Boolean, state: GateState?, met: Int, threshold: 
     state is GateState.Open -> stringResource(R.string.home_card_status_open)
     state is GateState.Warn -> stringResource(
         R.string.home_card_status_warn,
+        groupedInt((state.nextSteps - stepsNow(state.progress)).coerceAtLeast(0.0)),
         formatClock(state.deadline),
-        remainingLabel(state.deadline),
     )
     else -> stringResource(R.string.home_card_status_locked, met, threshold)
 }
 
-/** Live "3h 12m" until the deadline, recomputed every 30 s so the card stays honest without churn. */
-@Composable
-private fun remainingLabel(deadline: Instant): String {
-    val tick by rememberTicker(30_000L)
-    val remaining = (deadline.toEpochMilli() - tick).coerceAtLeast(0L).milliseconds
-    return formatCountdown(remaining)
-}
+private fun stepsNow(progress: List<ConditionProgress>): Double =
+    progress.firstOrNull { it.condition is Condition.Steps }?.current ?: 0.0
 
 /** The countdown strip shown while the gate is still open but the deadline is approaching. */
 @Composable

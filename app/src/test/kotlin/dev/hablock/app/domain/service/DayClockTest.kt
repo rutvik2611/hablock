@@ -46,27 +46,35 @@ class DayClockTest {
     }
 
     @Test
-    fun `deadline is five in the afternoon on the current gate day`() {
-        // Berlin is UTC+2 in August, so 17:00 local is 15:00Z.
+    fun `checkpoints are noon and five in local time`() {
+        // Berlin is UTC+2 in August, so 12:00 local is 10:00Z and 17:00 local is 15:00Z.
         val clock = clockAt("2026-08-23T09:30:00Z")
-        assertEquals(Instant.parse("2026-08-23T15:00:00Z"), clock.deadline())
-        assertTrue(!clock.isPastDeadline())
-        assertEquals(java.time.Duration.ofMinutes(330), clock.untilDeadline())
+        val checkpoints = clock.checkpoints()
+        assertEquals(2, checkpoints.size)
+        assertEquals(Instant.parse("2026-08-23T10:00:00Z"), checkpoints[0].at)
+        assertEquals(4_000.0, checkpoints[0].steps)
+        assertEquals(Instant.parse("2026-08-23T15:00:00Z"), checkpoints[1].at)
+        assertEquals(10_000.0, checkpoints[1].steps)
     }
 
     @Test
-    fun `a passed deadline reports zero remaining and does not roll to tomorrow`() {
-        val clock = clockAt("2026-08-23T16:30:00Z")
-        assertEquals(Instant.parse("2026-08-23T15:00:00Z"), clock.deadline())
-        assertTrue(clock.isPastDeadline())
-        assertEquals(java.time.Duration.ZERO, clock.untilDeadline())
+    fun `nothing is due before noon and four thousand is due after it`() {
+        val morning = clockAt("2026-08-23T09:00:00Z")
+        assertEquals(0.0, morning.requiredSteps(now = morning.now()))
+        val afternoon = clockAt("2026-08-23T11:00:00Z") // 13:00 local
+        assertEquals(4_000.0, afternoon.requiredSteps(now = afternoon.now()))
+        val night = clockAt("2026-08-23T16:00:00Z") // 18:00 local
+        assertEquals(10_000.0, night.requiredSteps(now = night.now()))
     }
 
     @Test
-    fun `deadline belongs to the gate day, not the calendar day, after midnight`() {
-        val clock = clockAt("2026-08-22T23:30:00Z") // 01:30 local on the 23rd
-        assertEquals("2026-08-23", clock.dayKey())
-        assertEquals(Instant.parse("2026-08-23T15:00:00Z"), clock.deadline())
+    fun `next checkpoint moves from noon to five during the day`() {
+        val morning = clockAt("2026-08-23T09:00:00Z")
+        assertEquals(4_000.0, morning.nextCheckpoint(now = morning.now())!!.steps)
+        val afternoon = clockAt("2026-08-23T11:00:00Z")
+        assertEquals(10_000.0, afternoon.nextCheckpoint(now = afternoon.now())!!.steps)
+        val evening = clockAt("2026-08-23T16:00:00Z")
+        assertEquals(null, evening.nextCheckpoint(now = evening.now()))
     }
 
     @Test
