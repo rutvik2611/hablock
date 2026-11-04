@@ -33,6 +33,7 @@
     <string name="notif_gate_opened_text">Target reached. Your apps are back until the next checkpoint.</string>
     <string name="home_password_title">Unlock to change %1$s</string>
     <string name="home_password_body">This block is protected. Enter the password to switch it off.</string>
+    <string name="home_password_edit_body">Changing a block can shrink it to nothing. Enter the password to edit it.</string>
     <string name="home_password_delete_body">This block is protected. Enter the password to delete it.</string>
     <string name="home_password_label">Password</string>
     <string name="home_password_confirm">Confirm</string>

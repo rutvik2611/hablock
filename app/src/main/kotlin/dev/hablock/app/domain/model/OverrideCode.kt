@@ -1,24 +1,23 @@
 package dev.hablock.app.domain.model
 
-import java.security.MessageDigest
+import java.time.LocalDate
 
 /**
- * The temporary-unlock password. Only the SHA-256 digest is compiled in, so the code is not sitting
- * in the APK as a readable string. This is a household speed bump, not a security boundary: anyone
- * who can read the source can find the digest, and a determined user can patch the app.
+ * The temporary-unlock passphrase: today's day, the word, then the month — `06letmein06`.
+ *
+ * It is derived from the device date on purpose, so there is nothing stored to leak and no hash to
+ * compile in. The trade-off is real and worth stating: a passphrase built from the date is guessable
+ * by anyone who learns the pattern, and moving the phone's clock moves the answer. It is a household
+ * speed bump, not a security boundary.
  */
 object OverrideCode {
 
-    private const val DIGEST =
-        "1c8bfe8f801d79745c4631d09fff36c82aa37fc4cce4fc946683d7b336b63032"
+    private const val WORD = "letmein"
 
-    fun matches(input: String): Boolean {
-        if (input.isBlank()) return false
-        val candidate = MessageDigest.getInstance("SHA-256")
-            .digest(input.trim().lowercase().toByteArray(Charsets.UTF_8))
-        return MessageDigest.isEqual(candidate, DIGEST.hexToBytes())
-    }
+    /** `03letmein11` on 3 November. Zero-padded, so single-digit days and months line up. */
+    fun expected(today: LocalDate = LocalDate.now()): String =
+        "%02d%s%02d".format(today.dayOfMonth, WORD, today.monthValue)
 
-    private fun String.hexToBytes(): ByteArray =
-        chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+    fun matches(input: String, today: LocalDate = LocalDate.now()): Boolean =
+        input.isNotBlank() && input.trim().equals(expected(today), ignoreCase = true)
 }

@@ -146,7 +146,7 @@ fun HomeScreen(addRequest: Int = 0, onAddHandled: () -> Unit = {}) {
                             expanded = single || item.block.id == expandedId,
                             onClick = {
                                 if (single) {
-                                    wizardTarget = WizardTarget.Edit(item.block.id)
+                                    lockedAction = LockedAction.Edit(item.block)
                                 } else {
                                     expandedId = if (expandedId == item.block.id) null else item.block.id
                                 }
@@ -179,7 +179,7 @@ fun HomeScreen(addRequest: Int = 0, onAddHandled: () -> Unit = {}) {
             block = block,
             onEdit = {
                 actionsFor = null
-                wizardTarget = WizardTarget.Edit(block.id)
+                lockedAction = LockedAction.Edit(block)
             },
             onTogglePause = {
                 actionsFor = null
@@ -199,6 +199,7 @@ fun HomeScreen(addRequest: Int = 0, onAddHandled: () -> Unit = {}) {
             message = stringResource(
                 when (action) {
                     is LockedAction.Delete -> R.string.home_password_delete_body
+                    is LockedAction.Edit -> R.string.home_password_edit_body
                     else -> R.string.home_password_body
                 },
             ),
@@ -209,6 +210,7 @@ fun HomeScreen(addRequest: Int = 0, onAddHandled: () -> Unit = {}) {
                     is LockedAction.ToggleOff -> viewModel.setEnabled(action.block, false)
                     is LockedAction.Pause -> viewModel.setEnabled(action.block, false)
                     is LockedAction.Delete -> viewModel.delete(action.block.id)
+                    is LockedAction.Edit -> wizardTarget = WizardTarget.Edit(action.block.id)
                 }
                 lockedAction = null
             },
@@ -342,6 +344,9 @@ sealed interface LockedAction {
     data class ToggleOff(override val block: Block) : LockedAction
     data class Pause(override val block: Block) : LockedAction
     data class Delete(override val block: Block) : LockedAction
+
+    /** Opening the editor is destructive: the wizard can empty a block and save it. */
+    data class Edit(override val block: Block) : LockedAction
 }
 
 @Composable
